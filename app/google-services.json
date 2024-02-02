@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "658256280414",
+    "project_id": "celeblingo-5cb9e",
+    "storage_bucket": "celeblingo-5cb9e.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:658256280414:android:12fe5f1c14454a34346dcf",
+        "android_client_info": {
+          "package_name": "com.celeblingo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCzkLek68w8rKp5yC0ztFlWnYiPtp0JPY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

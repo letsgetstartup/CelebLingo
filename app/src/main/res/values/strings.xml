@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">CelebLingo</string>
+    <string name="title">Title</string>
+    <string name="speak_aloud">Speak Aloud</string>
+    <string name="open_setting">Open Setting</string>
+    <string name="oops">OOPS</string>
+    <string name="no_internet_connection">No Internet Connection</string>
+    <string name="error_msg_2">Please check your Internet Connection</string>
+    <string name="reload">Reload</string>
+    <string name="item_image">Item Image</string>
+</resources>
