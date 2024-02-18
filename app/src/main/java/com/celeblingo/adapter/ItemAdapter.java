@@ -70,7 +70,6 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
             context.startActivity(new Intent(context, WebViewActivity.class)
                     .putExtra("url", gpturlArrayList.get(position).getUrl()));
         });
-//        holder.slider.setSlideAnimation(AnimationTypes.FIDGET_SPINNER);
 
         getCardItemBGImages(position+1, holder.slider);
         Glide.with(context).load(gpturlArrayList.get(position).getImage())
