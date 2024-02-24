@@ -8,4 +8,16 @@
     <string name="error_msg_2">Please check your Internet Connection</string>
     <string name="reload">Reload</string>
     <string name="item_image">Item Image</string>
+    <string name="organizer">Organizer</string>
+    <string name="summary">Summary</string>
+    <string name="description">Description</string>
+    <string name="start_time">Start Time</string>
+    <string name="end_time">End Time</string>
+    <string name="attendees">Attendees</string>
+    <string name="join">Join</string>
+    <string name="no_data">No Upcoming Meetings</string>
+    <string name="title_home">Home</string>
+    <string name="meeting">Meeting</string>
+    <string name="sign_in">Sign In</string>
+    <string name="exit">Exit</string>
 </resources>

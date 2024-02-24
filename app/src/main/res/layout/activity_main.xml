@@ -35,6 +35,7 @@
         android:layout_marginTop="5dp"
         android:layout_marginEnd="5dp"
         android:visibility="gone"
+        android:background="@drawable/rounded_btn_bg"
         android:layout_marginBottom="5dp"
         android:text="X" />
 
@@ -43,8 +44,21 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="SignIn"
+        android:background="@drawable/rounded_btn_bg"
         android:layout_margin="5dp"
         android:layout_alignParentTop="true"
         android:layout_alignParentEnd="true"/>
+
+    <ImageView
+        android:id="@+id/view_upcoming_meeting"
+        android:layout_width="50dp"
+        android:layout_height="50dp"
+        android:background="@drawable/rounded_btn_bg"
+        android:layout_alignParentBottom="true"
+        android:layout_alignParentEnd="true"
+        android:src="@drawable/calendar_icon"
+        android:padding="5dp"
+        android:layout_margin="10dp"
+        app:tint="@color/white" />
 
 </RelativeLayout>

@@ -3,24 +3,31 @@ package com.celeblingo;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.util.Base64;
 import android.util.Log;
 import android.view.ActionMode;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.WindowManager;
+import android.webkit.ConsoleMessage;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -32,17 +39,28 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.celeblingo.helper.DriveManager;
+import com.google.android.gms.auth.api.signin.GoogleSignIn;
+import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.services.drive.DriveScopes;
+import com.google.firebase.database.FirebaseDatabase;
+
+import java.io.ByteArrayOutputStream;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
 public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMenuItemClickListener {
-    private String url;
+    private String url, type, meetingId;
     private WebView webView;
     private ProgressBar progressBar;
     private Button closeBtn;
-    private ImageView speakAloud;
+    private ImageView takeSSBtn;
     private TTSManager ttsManager;
     int paragraphCount;
     private String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
@@ -50,6 +68,8 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
     private Button opeSettingBtn, reloadBtn;
     private RelativeLayout rootLayout;
     private ImageView customIv;
+    private Handler handler;
+    private Runnable runnable;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -58,6 +78,8 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         url = getIntent().getStringExtra("url");
+        type = getIntent().getStringExtra("type");
+        meetingId = getIntent().getStringExtra("meetingId");
         initViews();
 
         ttsManager = new TTSManager(this);
@@ -71,16 +93,86 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
         setWebViewSettings();
         setWebViewClient();
 
+        if (type != null) {
+            if (type.equals("meeting")) {
+                updateMeetingLinkInDB();
+            }
+        }
+
         webView.addJavascriptInterface(new JavaScriptInterface(), "Android");
 
         if (isInternetAvailable()) {
             webView.loadUrl(url);
-        }else {
+        } else {
             progressBar.setVisibility(View.GONE);
             webView.setVisibility(View.GONE);
             relativeLayout.setVisibility(View.VISIBLE);
         }
 
+    }
+    private void updateMeetingLinkInDB() {
+        handler = new Handler();
+        runnable = new Runnable() {
+            @Override
+            public void run() {
+                if (meetingId != null) {
+                    FirebaseDatabase.getInstance().getReference().child("Meetings")
+                            .child(meetingId).child("description")
+                            .setValue(webView.getUrl());
+                }
+            }
+        };
+        handler.postDelayed(runnable, 5 * 60 * 1000);
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (handler !=null && runnable != null) {
+            handler.removeCallbacks(runnable);
+        }
+    }
+
+    private void captureScreenshot() {
+        Bitmap bitmap = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        webView.draw(canvas);
+
+        createNewFolder(bitmap);
+    }
+
+    private void createNewFolder(Bitmap bitmap) {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+        if (account != null) {
+            GoogleAccountCredential credential =
+                    GoogleAccountCredential.usingOAuth2(
+                            this, Collections.singleton(DriveScopes.DRIVE_FILE));
+            credential.setSelectedAccount(account.getAccount());
+            @SuppressLint("SimpleDateFormat") SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
+            String folderName = dateFormatter.format(new Date());
+            DriveManager driveManager = new DriveManager(credential, folderName, bitmap, null, new DriveManager.DriveTaskListener() {
+                @Override
+                public void onDriveTaskCompleted(String id) {
+                    WebViewActivity.this.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(WebViewActivity.this, "Folder created successfully " + id, Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+
+                @Override
+                public void onDriveTaskFailed() {
+                    WebViewActivity.this.runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(WebViewActivity.this, "Failed to create folder", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            });
+            driveManager.execute();
+        }
     }
 
     public class JavaScriptInterface {
@@ -89,27 +181,24 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    speakAloud.setVisibility(View.GONE);
                     float density = getResources().getDisplayMetrics().density;
                     int leftPx = (int) (left * density);
                     int topPx = (int) (top * density);
-                    int widthPx = (int) (width * density);
+                    int widthPx = (int) (100);
                     int heightPx = (int) (80);
-                    Log.d("==custivpx", density + " : " + leftPx + " : " + topPx + " : " + widthPx + " : " + heightPx);
-                    Log.d("==custiv", left + " : " + top + " : " + width + " : " + height);
-                    if (customIv != null){
+                    if (customIv != null) {
                         rootLayout.removeView(customIv);
                     }
                     customIv = new ImageView(WebViewActivity.this);
                     customIv.setImageResource(R.drawable.text_to_speech_icon);
+                    customIv.setBackground(getDrawable(R.drawable.rounded_btn_bg));
+                    customIv.setPadding(5, 5, 5, 5);
 
-                    // Set layout params for the ImageView
                     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(widthPx, heightPx);
                     params.rightMargin = leftPx;
-                    params.topMargin = topPx - heightPx; // Position the ImageView above the selected text
+                    params.topMargin = topPx - heightPx;
                     customIv.setLayoutParams(params);
 
-                    // Add ImageView to the root layout
                     rootLayout.addView(customIv);
                     customIv.setOnClickListener(view -> {
                         webView.evaluateJavascript("(function() { return window.getSelection().toString(); })();", value -> {
@@ -134,7 +223,7 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    Log.d("Selected sentence: " , selectedSentence);
+                    Log.d("Selected sentence: ", selectedSentence);
                 }
             });
         }
@@ -144,10 +233,9 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    if (customIv != null){
+                    if (customIv != null) {
                         rootLayout.removeView(customIv);
                     }
-                    speakAloud.setVisibility(View.GONE);
                 }
             });
         }
@@ -160,7 +248,7 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 if (isInternetAvailable()) {
                     view.loadUrl(url);
-                }else {
+                } else {
                     progressBar.setVisibility(View.GONE);
                     webView.setVisibility(View.GONE);
                     relativeLayout.setVisibility(View.VISIBLE);
@@ -177,9 +265,11 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+                Log.d("url fin", url + " : ");
                 progressBar.setVisibility(View.GONE);
                 injectRtlScript(view);
                 injectTextSelectionScript(view);
+                //injectImgAtLineEndScript(view);
             }
 
             @Override
@@ -209,16 +299,6 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
                         "});", null);
     }
 
-    String js = "document.addEventListener('selectionchange', function() {" +
-            "    var selection = window.getSelection();" +
-            "    var selectedText = selection.toString().trim();" +
-            "    if (selectedText !== '') {" +
-            "        var range = selection.getRangeAt(0);" +
-            "        var rect = range.getBoundingClientRect();" +
-            "        Android.onTextSelected(rect.left, rect.top, rect.width, rect.height);" +
-            "    }" +
-            "});";
-
     private void injectRtlScript(WebView view) {
         String jsRtl = "var elements = document.querySelectorAll('p, div, span, li');"
                 + "Array.prototype.forEach.call(elements, function(el) {"
@@ -226,6 +306,66 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
                 + "    el.style.textAlign = 'right';"
                 + "});";
         view.evaluateJavascript(jsRtl, null);
+    }
+
+    private void injectImgAtLineEndScript(WebView view) {
+        String imageUrl = "https://cdn.vectorstock.com/i/1000x1000/53/07/24-hours-icon-clock-open-time-service-or-delivery-vector-34525307.webp";
+        String javascriptCode5 = "(function() {" +
+                "var lines = document.querySelectorAll('p, div, span, li');" +
+                "lines.forEach(function(line) {" +
+                "  if (line.childNodes.length === 1 && line.childNodes[0].nodeType === Node.TEXT_NODE) {" + // Check if the line contains only text
+                "    var imageView = document.createElement('img');" +
+                "    imageView.src = '" + imageUrl + "';" + // Set the src attribute to the image URL
+                "    imageView.style.cursor = 'pointer';" +
+                "    imageView.style.width = '25px';" + // Adjust width as needed
+                "    imageView.style.height = '25px';" + // Adjust height as needed
+                "    imageView.addEventListener('click', function() {" +
+                "      var range = document.createRange();" +
+                "      range.selectNodeContents(line);" +
+                "      var selection = window.getSelection();" +
+                "      selection.removeAllRanges();" +
+                "      selection.addRange(range);" +
+                "    });" +
+                "    line.appendChild(imageView);" +
+                "  }" +
+                "});" +
+                "})();";
+
+        String javascriptCode = "(function() {" +
+                "var chatMessages = document.querySelectorAll('.chat-message');" + // Adjust the selector to match your chat message elements
+                "chatMessages.forEach(function(message) {" +
+                "  var lastChild = message.lastElementChild;" + // Get the last child element of the chat message
+                "  if (lastChild && lastChild.tagName.toLowerCase() !== 'img') {" + // Check if the last child is not already an image
+                "    var imageView = document.createElement('img');" +
+                "    imageView.src = '" + imageUrl + "';" + // Set the src attribute to the image URL
+                "    imageView.style.cursor = 'pointer';" +
+                "    imageView.style.width = '25px';" + // Adjust width as needed
+                "    imageView.style.height = '25px';" + // Adjust height as needed
+                "    imageView.addEventListener('click', function() {" +
+                "      var range = document.createRange();" +
+                "      range.selectNodeContents(message);" + // Select the entire chat message
+                "      var selection = window.getSelection();" +
+                "      selection.removeAllRanges();" +
+                "      selection.addRange(range);" +
+                "    });" +
+                "    message.appendChild(imageView);" +
+                "  }" +
+                "});" +
+                "})();";
+
+        String javascriptCode1 = "(function() { var messages = document.querySelectorAll('.chat-message'); messages.forEach(function(message) { var lastChild = message.lastChild; if (lastChild && lastChild.tagName.toLowerCase() !== 'img') { var imageView = document.createElement('img'); imageView.src = '" + imageUrl + "'; imageView.style.cursor = 'pointer'; imageView.style.width = '50px'; imageView.style.height = '50px'; imageView.addEventListener('click', function() { var range = document.createRange(); range.selectNodeContents(message); var selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range); }); message.appendChild(imageView); } }); })();";
+
+
+        String jsCode = "javascript:(function() {" +
+                "var btn = document.createElement('button');" +
+                "btn.innerHTML = 'JS Button';" +
+                "btn.onclick = function() { alert('Button clicked!'); };" +
+                "var chatComponent = document.querySelector('.chat-conversation');" +
+                "chatComponent.insertBefore(btn, chatComponent.firstChild);" +
+                "})()";
+
+
+        view.evaluateJavascript(jsCode, null);
     }
 
     private void setWebViewSettings() {
@@ -258,7 +398,7 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
         rootLayout = findViewById(R.id.root_lyt);
         webView = findViewById(R.id.webView);
         closeBtn = findViewById(R.id.close_button);
-        speakAloud = findViewById(R.id.speak_button);
+        takeSSBtn = findViewById(R.id.screenshot_button);
         progressBar = findViewById(R.id.progress_bar);
         relativeLayout = findViewById(R.id.relative_layout);
         opeSettingBtn = findViewById(R.id.open_setting_btn);
@@ -266,11 +406,8 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
     }
 
     private void setClickListeners() {
-        speakAloud.setOnClickListener(view -> {
-            webView.evaluateJavascript("(function() { return window.getSelection().toString(); })();", value -> {
-                String utteranceId = UUID.randomUUID().toString();
-                ttsManager.speak(value, utteranceId);
-            });
+        takeSSBtn.setOnClickListener(view -> {
+            captureScreenshot();
         });
         closeBtn.setOnClickListener(view -> {
             startActivity(new Intent(WebViewActivity.this, MainActivity.class)
@@ -363,24 +500,19 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
                     textToSpeech.setLanguage(Locale.US);
                 }
             });
-            // Create an UtteranceProgressListener object to handle callbacks
             UtteranceProgressListener utteranceProgressListener = new UtteranceProgressListener() {
                 @Override
                 public void onStart(String utteranceId) {
-                    // Called when TTS starts speaking
                 }
 
                 @Override
                 public void onDone(String utteranceId) {
-                    // Called when TTS finishes speaking
                 }
 
                 @Override
                 public void onError(String utteranceId) {
-                    // Called when TTS encounters an error
                 }
             };
-            // Add the UtteranceProgressListener to the TextToSpeech object
             textToSpeech.setOnUtteranceProgressListener(utteranceProgressListener);
         }
 
@@ -414,17 +546,17 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
     public boolean isInternetAvailable() {
         ConnectivityManager connectivityManager = (ConnectivityManager) this.getSystemService(Context.CONNECTIVITY_SERVICE);
         NetworkInfo networkInfo = connectivityManager.getActiveNetworkInfo();
-        if (networkInfo == null){
+        if (networkInfo == null) {
             progressBar.setVisibility(View.GONE);
             webView.setVisibility(View.GONE);
             relativeLayout.setVisibility(View.VISIBLE);
             return false;
         }
-        if (networkInfo.isConnectedOrConnecting()){
+        if (networkInfo.isConnectedOrConnecting()) {
             webView.setVisibility(View.VISIBLE);
             relativeLayout.setVisibility(View.GONE);
             return true;
-        }else {
+        } else {
             progressBar.setVisibility(View.GONE);
             webView.setVisibility(View.GONE);
             relativeLayout.setVisibility(View.VISIBLE);

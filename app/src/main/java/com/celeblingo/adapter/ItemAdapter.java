@@ -64,11 +64,13 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
         holder.bodyTxt.setText(gpturlArrayList.get(position).getText());
         holder.itemView.setOnClickListener(view -> {
             context.startActivity(new Intent(context, WebViewActivity.class)
-                    .putExtra("url", gpturlArrayList.get(position).getUrl()));
+                    .putExtra("url", gpturlArrayList.get(position).getUrl())
+                    .putExtra("type", "card"));
         });
         holder.itemContentLyt.setOnClickListener(view -> {
             context.startActivity(new Intent(context, WebViewActivity.class)
-                    .putExtra("url", gpturlArrayList.get(position).getUrl()));
+                    .putExtra("url", gpturlArrayList.get(position).getUrl())
+                    .putExtra("type", "card"));
         });
 
         getCardItemBGImages(position+1, holder.slider);

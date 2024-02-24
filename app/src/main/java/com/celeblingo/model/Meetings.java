@@ -10,19 +10,22 @@ public class Meetings {
     private String description;
     private String startTime;
     private String endTime;
+    private String videoUrl;
     private List<Attendee> attendees;
     private Organizer organizer;
 
     public Meetings() {
     }
 
-    public Meetings(String id, String summary, String description, String startTime,
-                    String endTime, List<Attendee> attendees, Organizer organizer) {
+    public Meetings(String id, String summary, String description,
+                    String startTime, String endTime, String videoUrl,
+                    List<Attendee> attendees, Organizer organizer) {
         this.id = id;
         this.summary = summary;
         this.description = description;
         this.startTime = startTime;
         this.endTime = endTime;
+        this.videoUrl = videoUrl;
         this.attendees = attendees;
         this.organizer = organizer;
     }
@@ -67,6 +70,14 @@ public class Meetings {
         this.endTime = endTime;
     }
 
+    public String getVideoUrl() {
+        return videoUrl;
+    }
+
+    public void setVideoUrl(String videoUrl) {
+        this.videoUrl = videoUrl;
+    }
+
     public List<Attendee> getAttendees() {
         return attendees;
     }
@@ -83,18 +94,17 @@ public class Meetings {
         this.organizer = organizer;
     }
 
-    // Nested class for attendees
     public static class Attendee {
         private String email;
+        private String displayName;
         private String responseStatus;
-
-        // Constructor, getters, and setters
 
         public Attendee() {
         }
 
-        public Attendee(String email, String responseStatus) {
+        public Attendee(String email, String displayName, String responseStatus) {
             this.email = email;
+            this.displayName = displayName;
             this.responseStatus = responseStatus;
         }
 
@@ -104,6 +114,14 @@ public class Meetings {
 
         public void setEmail(String email) {
             this.email = email;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+
+        public void setDisplayName(String displayName) {
+            this.displayName = displayName;
         }
 
         public String getResponseStatus() {
@@ -119,31 +137,22 @@ public class Meetings {
     // Nested class for organizer
     public static class Organizer {
         private String email;
-        private String displayName;
-        private boolean self; // True if the organizer is the authenticated user
+        private boolean self;
 
-        // Constructor
-        public Organizer(String email, String displayName, boolean self) {
+        public Organizer() {
+        }
+
+        public Organizer(String email, boolean self) {
             this.email = email;
-            this.displayName = displayName;
             this.self = self;
         }
 
-        // Getters and Setters
         public String getEmail() {
             return email;
         }
 
         public void setEmail(String email) {
             this.email = email;
-        }
-
-        public String getDisplayName() {
-            return displayName;
-        }
-
-        public void setDisplayName(String displayName) {
-            this.displayName = displayName;
         }
 
         public boolean isSelf() {
