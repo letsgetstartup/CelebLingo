@@ -4,61 +4,23 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/app_bg"
+    android:background="@color/colorAccent"
     tools:context=".MainActivity">
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recycler"
+    <FrameLayout
+        android:id="@+id/fragment_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_marginStart="10dp"
-        android:layout_marginTop="10dp"
-        android:layout_marginEnd="10dp"
-        android:layout_marginBottom="10dp"
-        android:padding="10dp"
-        tools:listitem="@layout/layout_items" />
-
-    <ProgressBar
-        android:id="@+id/progress_bar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_above="@+id/bottom_nav_view"
         android:layout_centerInParent="true"
-        />
+        android:background="@drawable/app_bg" />
 
-    <Button
-        android:id="@+id/close_button"
-        android:layout_width="wrap_content"
+    <com.google.android.material.bottomnavigation.BottomNavigationView
+        android:id="@+id/bottom_nav_view"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentStart="true"
-        android:layout_alignParentTop="true"
-        android:layout_marginStart="5dp"
-        android:layout_marginTop="5dp"
-        android:layout_marginEnd="5dp"
-        android:visibility="gone"
-        android:background="@drawable/rounded_btn_bg"
-        android:layout_marginBottom="5dp"
-        android:text="X" />
-
-    <Button
-        android:id="@+id/sign_button"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="SignIn"
-        android:background="@drawable/rounded_btn_bg"
-        android:layout_margin="5dp"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true"/>
-
-    <ImageView
-        android:id="@+id/view_upcoming_meeting"
-        android:layout_width="50dp"
-        android:layout_height="50dp"
-        android:background="@drawable/rounded_btn_bg"
         android:layout_alignParentBottom="true"
-        android:layout_alignParentEnd="true"
-        android:src="@drawable/calendar_icon"
-        android:padding="5dp"
-        android:layout_margin="10dp"
-        app:tint="@color/white" />
+        android:background="@color/colorPrimary"
+        app:menu="@menu/bottom_nav_menu" />
 
 </RelativeLayout>

@@ -51,7 +51,7 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
         int width = displayMetrics.widthPixels;
         int height = displayMetrics.heightPixels;
 
-        RecyclerView.LayoutParams params = new RecyclerView.LayoutParams((int) (width/2.5),
+        RecyclerView.LayoutParams params = new RecyclerView.LayoutParams((int) (width / 2.0),
                 RecyclerView.LayoutParams.MATCH_PARENT);
         params.setMargins(8, 8, 8, 8);
         v.setLayoutParams(params);
@@ -73,7 +73,7 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
                     .putExtra("type", "card"));
         });
 
-        getCardItemBGImages(position+1, holder.slider);
+        getCardItemBGImages(position + 1, holder.slider);
         Glide.with(context).load(gpturlArrayList.get(position).getImage())
                 .into(holder.itemImage);
     }
@@ -81,12 +81,12 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
     private void getCardItemBGImages(int id, ImageSlider slider) {
         ArrayList<SlideModel> imageList = new ArrayList<>();
         DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("GPTURL")
-                .child(id+"").child("BGImages");
+                .child(id + "").child("BGImages");
         reference.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.exists()){
-                    for (DataSnapshot dataSnapshot : snapshot.getChildren()){
+                if (snapshot.exists()) {
+                    for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
                         BGImages bgImages = dataSnapshot.getValue(BGImages.class);
                         assert bgImages != null;
                         imageList.add(new SlideModel(bgImages.getImage(), ScaleTypes.FIT));
@@ -112,6 +112,7 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
         ImageView itemImage;
         ImageSlider slider;
         LinearLayout itemContentLyt;
+
         public ViewHolder(@NonNull View itemView) {
             super(itemView);
             titleTxt = itemView.findViewById(R.id.item_title);

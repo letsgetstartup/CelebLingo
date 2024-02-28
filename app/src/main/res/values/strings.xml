@@ -17,7 +17,14 @@
     <string name="join">Join</string>
     <string name="no_data">No Upcoming Meetings</string>
     <string name="title_home">Home</string>
-    <string name="meeting">Meeting</string>
+    <string name="meeting">Class</string>
     <string name="sign_in">Sign In</string>
     <string name="exit">Exit</string>
+    <string name="close">Close</string>
+    <string name="upcoming">Upcoming</string>
+    <string name="history_title">History</string>
+    <string name="are_you_sure_you_want_to_exit">Are you sure you want to exit?</string>
+    <string name="cancel">Cancel</string>
+    <string name="kidi_ai">Kidi AI</string>
+    <string name="save">Save</string>
 </resources>

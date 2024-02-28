@@ -3,104 +3,129 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:background="@color/white"
-    >
-
-    <ImageView
-        android:id="@+id/close_btn"
-        android:layout_width="30dp"
-        android:layout_height="30dp"
-        android:src="@android:drawable/ic_menu_close_clear_cancel"
-        android:layout_alignParentEnd="true"
-        android:layout_alignParentTop="true"
-        android:layout_margin="5dp"
-        app:tint="@color/black"/>
+    android:background="@drawable/rounded_bg">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_below="@id/close_btn"
         android:layout_margin="5dp"
         android:orientation="vertical">
 
         <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
             android:id="@+id/youtube_view"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:padding="5dp"/>
+            android:layout_height="wrap_content" />
 
         <TextView
             android:id="@+id/organizer_display_name_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/organizer"
-            android:textSize="18sp"
             android:padding="5dp"
+            android:text="@string/organizer"
             android:textColor="@color/black"
-            />
+            android:textSize="18sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/summary_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:lineSpacingExtra="4sp"
             android:text="@string/summary"
-            android:textSize="18sp"
-            android:padding="5dp"
-            android:textColor="@color/black"
-            />
+            android:textColor="@color/title_txt_clr"
+            android:textSize="24sp" />
 
         <TextView
             android:id="@+id/description_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/description"
-            android:textSize="18sp"
             android:padding="5dp"
-            android:visibility="gone"
+            android:text="@string/description"
             android:textColor="@color/black"
-            />
+            android:textSize="18sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/start_time_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:letterSpacing="0.02"
+            android:lineSpacingExtra="4sp"
             android:text="@string/start_time"
-            android:textSize="18sp"
-            android:padding="5dp"
-            android:textColor="@color/black"
-            />
+            android:textColor="@color/txt_clr"
+            android:textSize="14sp" />
 
         <TextView
             android:id="@+id/end_time_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/end_time"
-            android:textSize="18sp"
             android:padding="5dp"
+            android:text="@string/end_time"
             android:textColor="@color/black"
-            />
+            android:textSize="18sp"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/attendee_email_txt"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="@string/attendees"
-            android:textSize="18sp"
             android:padding="5dp"
-            android:visibility="gone"
+            android:text="@string/attendees"
             android:textColor="@color/black"
-            />
+            android:textSize="18sp"
+            android:visibility="gone" />
 
-        <Button
-            android:id="@+id/join_meeting_btn"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="10dp"
-            android:text="@string/join"
-            android:textSize="20sp"
-            android:padding="10dp"
-            android:textAlignment="center"
-            />
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:layout_marginBottom="10dp"
+            android:gravity="end"
+            android:orientation="horizontal">
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/close_meeting_btn"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="10dp"
+                android:background="@drawable/rounded_stroke_bg"
+                android:letterSpacing="0.01"
+                android:lineSpacingExtra="4sp"
+                android:paddingStart="25dp"
+                android:paddingEnd="25dp"
+                android:text="@string/close"
+                android:textAlignment="center"
+                android:textAllCaps="false"
+                android:textColor="@color/colorPrimaryDark"
+                android:textSize="16sp" />
+
+            <androidx.appcompat.widget.AppCompatButton
+                android:id="@+id/join_meeting_btn"
+                android:layout_width="120dp"
+                android:layout_height="wrap_content"
+                android:layout_margin="10dp"
+                android:background="@drawable/rounded_toolbar_bg"
+                android:backgroundTint="@color/bg_btn_clr"
+                android:letterSpacing="0.01"
+                android:lineSpacingExtra="4sp"
+                android:paddingStart="25dp"
+                android:paddingEnd="25dp"
+                android:text="@string/join"
+                android:textAlignment="center"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                android:textSize="16sp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

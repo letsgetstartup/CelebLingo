@@ -1,86 +1,118 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="5dp"
+    android:layout_margin="8dp"
     android:background="@drawable/rounded_bg"
-    android:padding="5dp"
-    android:backgroundTint="@color/white"
-    android:orientation="vertical">
+    android:backgroundTint="@color/grey"
+    android:elevation="5dp"
+    app:cardCornerRadius="15dp"
+    app:cardElevation="5dp"
+    app:cardMaxElevation="5dp">
 
-    <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
-        android:id="@+id/youtube_view"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        />
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/organizer_display_name_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/organizer"
-        android:visibility="gone"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
+        <!--        <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView-->
+        <!--            android:id="@+id/youtube_view"-->
+        <!--            android:layout_width="match_parent"-->
+        <!--            android:layout_height="wrap_content" />-->
 
-    <TextView
-        android:id="@+id/summary_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/summary"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
+        <TextView
+            android:id="@+id/organizer_display_name_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:padding="5dp"
+            android:text="@string/organizer"
+            android:textColor="@color/black"
+            android:textSize="18sp"
+            android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/description_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/description"
-        android:visibility="gone"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
-
-    <TextView
-        android:id="@+id/start_time_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/start_time"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
-
-    <TextView
-        android:id="@+id/end_time_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/end_time"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
-
-    <TextView
-        android:id="@+id/attendee_email_txt"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="5dp"
-        android:text="@string/attendees"
-        android:visibility="gone"
-        android:textColor="@color/black"
-        android:textSize="18sp" />
-
-    <Button
-        android:id="@+id/join_meeting_btn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_margin="10dp"
-        android:padding="10dp"
-        android:visibility="gone"
-        android:text="@string/join"
-        android:textAlignment="center"
-        android:textSize="20sp" />
+        <TextView
+            android:id="@+id/summary_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:lineSpacingExtra="4sp"
+            android:text="@string/summary"
+            android:textColor="@color/title_txt_clr"
+            android:textSize="24sp" />
 
 
-</LinearLayout>
+        <TextView
+            android:id="@+id/description_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:padding="5dp"
+            android:text="@string/description"
+            android:textColor="@color/black"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/start_time_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:letterSpacing="0.02"
+            android:lineSpacingExtra="4sp"
+            android:text="@string/start_time"
+            android:textColor="@color/txt_clr"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/end_time_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:padding="5dp"
+            android:text="@string/end_time"
+            android:textColor="@color/black"
+            android:textSize="20sp"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/attendee_email_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_margin="5dp"
+            android:padding="5dp"
+            android:text="@string/attendees"
+            android:textColor="@color/black"
+            android:textSize="18sp"
+            android:visibility="gone" />
+
+        <androidx.appcompat.widget.AppCompatButton
+            android:id="@+id/join_meeting_btn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:layout_marginBottom="15dp"
+            android:background="@drawable/rounded_toolbar_bg"
+            android:backgroundTint="@color/bg_btn_clr"
+            android:gravity="center"
+            android:paddingStart="30dp"
+            android:paddingEnd="30dp"
+            android:text="@string/join"
+            android:textAllCaps="false"
+            android:textColor="@color/white"
+            android:textSize="20sp" />
+
+    </LinearLayout>
+
+
+</androidx.cardview.widget.CardView>

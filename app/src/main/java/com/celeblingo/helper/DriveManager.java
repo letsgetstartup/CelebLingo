@@ -53,7 +53,7 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                     File folder = mDriveService.files().create(fileMetadata)
                             .setFields("id")
                             .execute();
-                        uploadDrawableToDrive(folder.getId(), mDriveService, bitmap);
+                    uploadDrawableToDrive(folder.getId(), mDriveService, bitmap);
                 } catch (IOException e) {
                     e.printStackTrace();
                     if (mListener != null) {
@@ -61,7 +61,7 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                     }
                 }
                 return null;
-            }else {
+            } else {
                 Log.d("==drive", "folder exists " + getExistingFolderId(mFolderName));
                 uploadDrawableToDrive(getExistingFolderId(mFolderName), mDriveService, bitmap);
             }
@@ -126,6 +126,7 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
 
     public interface DriveTaskListener {
         void onDriveTaskCompleted(String id);
+
         void onDriveTaskFailed();
     }
 

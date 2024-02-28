@@ -7,18 +7,20 @@
         android:title="@string/title_home" />
 
     <item
-        android:id="@+id/navigation_calendar"
+        android:id="@+id/navigation_meetings"
         android:icon="@drawable/calendar_icon"
         android:title="@string/meeting" />
 
     <item
         android:id="@+id/navigation_sign_in"
         android:icon="@drawable/ic_login"
-        android:title="@string/sign_in" />
+        android:title="@string/sign_in"
+        android:visible="false"/>
 
     <item
         android:id="@+id/navigation_exit"
         android:icon="@drawable/ic_exit"
-        android:title="@string/exit" />
+        android:title="@string/exit"
+        android:visible="false" />
 
 </menu>

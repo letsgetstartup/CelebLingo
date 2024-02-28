@@ -1,5 +1,6 @@
 package com.celeblingo;
 
+import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Intent;
 import android.graphics.Color;
@@ -10,25 +11,29 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.ImageView;
-import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.appcompat.widget.AppCompatButton;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.celeblingo.adapter.ItemAdapter;
 import com.celeblingo.adapter.MeetingAdapter;
-import com.celeblingo.model.GPTURL;
+import com.celeblingo.fragment.HomeFragment;
+import com.celeblingo.fragment.MeetingFragment;
+import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -38,6 +43,8 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import com.google.android.material.bottomsheet.BottomSheetDialog;
+import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -64,6 +71,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -76,30 +84,16 @@ import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends BaseActivity {
     private static final int RC_SIGN_IN = 121;
-    private DatabaseReference urlRef;
-    private RecyclerView recyclerView;
-    private ProgressBar progressBar;
-    private Button closeBtn, signInBtn;
-    private ImageView viewUpcomingMeeting;
-    private RecyclerView.LayoutManager layoutManager;
-    private ItemAdapter adapter;
-    private ArrayList<GPTURL> gpturlArrayList = new ArrayList<>();
-
     private GoogleAccountCredential mCredential = null;
     private com.google.api.services.calendar.Calendar mService;
     private String meetingId, joinMeetingUrl = null;
-    private ArrayList<Meetings> meetingsArrayList = new ArrayList<>();
-    private RecyclerView meetingRecycler;
-    private MeetingAdapter meetingAdapter;
     private Dialog dialog;
-    private ImageView closeImg;
     private TextView organizerNameTxt, summaryTtx, descriptionTxt,
             startTimeTxt, endTimeTxt, attendeesTxt;
     private YouTubePlayerView youTubePlayerView;
     private String youtubeVideoId;
-    private Button joinBtn;
     private BottomNavigationView navigationView;
 
     @Override
@@ -108,121 +102,54 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        progressBar = findViewById(R.id.progress_bar);
-        recyclerView = findViewById(R.id.recycler);
-        closeBtn = findViewById(R.id.close_button);
-        signInBtn = findViewById(R.id.sign_button);
-        viewUpcomingMeeting = findViewById(R.id.view_upcoming_meeting);
-        layoutManager = new GridLayoutManager(this, 2,
-                LinearLayoutManager.HORIZONTAL, false);
-        recyclerView.setHasFixedSize(true);
-        recyclerView.setLayoutManager(layoutManager);
+        navigationView = findViewById(R.id.bottom_nav_view);
 
         setUpBottomNavView();
-
-        closeBtn.setOnClickListener(view -> {
-            finish();
-        });
-
-        getUrlFromDatabase();
         startSystemAlertWindowPermission();
         showJoinMeetingDialog();
-
-
-        signInBtn.setOnClickListener(view -> {
-            initCredentials();
-            GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
-            if (account != null) {
-                mCredential.setSelectedAccountName(account.getEmail());
-                //if (Objects.equals(account.getEmail(), "celeblingo@gmail.com"))
-                {
-                    getResultsFromApi();
-                }
-            } else {
-                googleSignIn();
-            }
-        });
-
-        viewUpcomingMeeting.setOnClickListener(view -> {
-            showViewAllMeetingDialog();
-        });
 
     }
 
     private void setUpBottomNavView() {
-
-    }
-
-    private void showViewAllMeetingDialog() {
-        Dialog dialog = new Dialog(this);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setContentView(R.layout.dialog_view_all_meeting);
-        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        dialog.setCanceledOnTouchOutside(false);
-
-        ImageView closeImg = dialog.findViewById(R.id.close_btn);
-        TextView noDataTxt = dialog.findViewById(R.id.no_data_txt);
-        meetingRecycler = dialog.findViewById(R.id.meeting_recycler);
-        meetingRecycler.setHasFixedSize(true);
-        meetingRecycler.setLayoutManager(new LinearLayoutManager(this, LinearLayoutManager.VERTICAL, false));
-
-        getAllMeetingData(dialog, meetingRecycler, noDataTxt);
-
-        closeImg.setOnClickListener(view -> {
-            dialog.dismiss();
-        });
-
-        dialog.show();
-    }
-
-    private void getAllMeetingData(Dialog dialog, RecyclerView meetingRecycler, TextView noDataTxt) {
-        DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
-        reference.addListenerForSingleValueEvent(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.exists()) {
-                    meetingsArrayList.clear();
-                    for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
-                        Meetings meetings = dataSnapshot.getValue(Meetings.class);
-                        assert meetings != null;
-                        Date currentDate = new Date();
-
-                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-                        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
-                        Date providedStartDate = null, providedEndDate = null;
-                        try {
-                            providedStartDate = dateFormat.parse(meetings.getStartTime());
-                            providedEndDate = dateFormat.parse(meetings.getEndTime());
-                        } catch (ParseException e) {
-                            Log.d("exception", Objects.requireNonNull(e.getMessage()));
-                        }
-                        if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
-                            meetingsArrayList.add(meetings);
-                            meetingAdapter.notifyDataSetChanged();
-                        } else if (currentDate.compareTo(providedStartDate) > 0) {
-                            if (currentDate.compareTo(providedEndDate)< 0 || currentDate.compareTo(providedEndDate) == 0){
-                                meetingsArrayList.add(meetings);
-                                meetingAdapter.notifyDataSetChanged();
-                            }
-                        }
-                    }
-                    if (meetingsArrayList.isEmpty()){
-                        noDataTxt.setVisibility(View.VISIBLE);
-                    }else {
-                        noDataTxt.setVisibility(View.GONE);
-                    }
-                }else {
-                    noDataTxt.setVisibility(View.VISIBLE);
+        navigationView.setSelectedItemId(R.id.navigation_home);
+        replaceFragment(getSupportFragmentManager(), new HomeFragment(), R.id.fragment_container);
+        navigationView.setOnItemSelectedListener(item -> {
+            int id = item.getItemId();
+            if (id == R.id.navigation_home) {
+                replaceFragment(getSupportFragmentManager(), new HomeFragment(), R.id.fragment_container);
+                return true;
+            } else if (id == R.id.navigation_meetings) {
+                initCredentials();
+                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
+                if (account != null) {
+                    mCredential.setSelectedAccountName(account.getEmail());
+                    getResultsFromApi();
+                } else {
+                    googleSignIn();
                 }
+                return true;
+            } else if (id == R.id.navigation_sign_in) {
+                initCredentials();
+                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
+                if (account != null) {
+                    mCredential.setSelectedAccountName(account.getEmail());
+                    getResultsFromApi();
+                } else {
+                    googleSignIn();
+                }
+                return true;
+            } else if (id == R.id.navigation_exit) {
+                return true;
             }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                noDataTxt.setVisibility(View.VISIBLE);
-            }
+            return false;
         });
-        meetingAdapter = new MeetingAdapter(this, meetingsArrayList, dialog);
-        meetingRecycler.setAdapter(meetingAdapter);
+
+    }
+
+    private void replaceFragment(FragmentManager fragmentManager, Fragment fragment, int fragmentContainer) {
+        FragmentTransaction transaction = fragmentManager.beginTransaction();
+        transaction.replace(fragmentContainer, fragment);
+        transaction.commit();
     }
 
     private boolean compareDate(String startDate) {
@@ -268,7 +195,6 @@ public class MainActivity extends AppCompatActivity {
                         Log.d("==event ", meetings.getId());
                         if (compareDate(meetings.getStartTime())) {
                             setMeetingDataToDialog(reference, meetings);
-                            dialog.show();
                             return;
                         }
 
@@ -291,7 +217,12 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    @SuppressLint("SetTextI18n")
     private void setMeetingDataToDialog(DatabaseReference meetingRef, Meetings meetings) {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
+        if (account == null) {
+            return;
+        }
         meetingRef.child(meetings.getId()).child("Organizer")
                 .addListenerForSingleValueEvent(new ValueEventListener() {
                     @Override
@@ -301,6 +232,9 @@ public class MainActivity extends AppCompatActivity {
                                 Meetings.Organizer organizer = dataSnapshot.getValue(Meetings.Organizer.class);
                                 assert organizer != null;
                                 Log.d("==organ", organizer.getEmail());
+                                if (organizer.getEmail().equals(account.getEmail())) {
+                                    dialog.show();
+                                }
                                 organizerNameTxt.setText(organizer.getEmail());
                             }
                         } else {
@@ -338,12 +272,14 @@ public class MainActivity extends AppCompatActivity {
                 });
         summaryTtx.setText(meetings.getSummary());
         descriptionTxt.setText(meetings.getDescription());
-        startTimeTxt.setText(meetings.getStartTime());
-        endTimeTxt.setText(meetings.getEndTime());
+        startTimeTxt.setText(extractDateTime(meetings.getStartTime()) +
+                " - " +
+                extractTime(meetings.getEndTime()));
+        endTimeTxt.setText(extractDateTime(meetings.getEndTime()));
         joinMeetingUrl = meetings.getDescription();
         meetingId = meetings.getId();
         youtubeVideoId = extractVideoId(meetings.getVideoUrl());
-        if (youtubeVideoId.equals("NoId")){
+        if (youtubeVideoId.equals("NoId")) {
             youtubeVideoId = extractYTId(meetings.getVideoUrl());
         }
         youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
@@ -359,13 +295,33 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private String extractDateTime(String date) {
+        OffsetDateTime odt = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            odt = OffsetDateTime.parse(date);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E,MMM yyyy HH:mm");
+            return odt.format(formatter);
+        }
+        return date;
+    }
+
+    private String extractTime(String date) {
+        OffsetDateTime odt = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            odt = OffsetDateTime.parse(date);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
+            return odt.format(formatter);
+        }
+        return date;
+    }
+
     public static String extractYTId(String ytUrl) {
         String vId = null;
         Pattern pattern = Pattern.compile(
                 "^https?://.*(?:youtu.be/|v/|u/\\w/|embed/|watch?v=)([^#&?]*).*$",
                 Pattern.CASE_INSENSITIVE);
         Matcher matcher = pattern.matcher(ytUrl);
-        if (matcher.matches()){
+        if (matcher.matches()) {
             vId = matcher.group(1);
         }
         return vId;
@@ -391,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
         dialog.setCancelable(false);
 
 
-        closeImg = dialog.findViewById(R.id.close_btn);
+        AppCompatButton closeBtn = dialog.findViewById(R.id.close_meeting_btn);
         organizerNameTxt = dialog.findViewById(R.id.organizer_display_name_txt);
         summaryTtx = dialog.findViewById(R.id.summary_txt);
         descriptionTxt = dialog.findViewById(R.id.description_txt);
@@ -399,11 +355,11 @@ public class MainActivity extends AppCompatActivity {
         endTimeTxt = dialog.findViewById(R.id.end_time_txt);
         attendeesTxt = dialog.findViewById(R.id.attendee_email_txt);
         youTubePlayerView = dialog.findViewById(R.id.youtube_view);
-        joinBtn = dialog.findViewById(R.id.join_meeting_btn);
+        AppCompatButton joinBtn = dialog.findViewById(R.id.join_meeting_btn);
 
         getLifecycle().addObserver(youTubePlayerView);
 
-        closeImg.setOnClickListener(view -> {
+        closeBtn.setOnClickListener(view -> {
             dialog.dismiss();
         });
 
@@ -451,38 +407,12 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
     }
 
-    private void getUrlFromDatabase() {
-        urlRef = FirebaseDatabase.getInstance().getReference().child("GPTURL");
-        urlRef.addValueEventListener(new ValueEventListener() {
-            @Override
-            public void onDataChange(@NonNull DataSnapshot snapshot) {
-                gpturlArrayList.clear();
-                if (snapshot.exists()) {
-                    for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
-                        GPTURL gpturl = dataSnapshot.getValue(GPTURL.class);
-                        gpturlArrayList.add(gpturl);
-                        adapter.notifyDataSetChanged();
-                    }
-                } else {
-                    Toast.makeText(MainActivity.this, "No Data.", Toast.LENGTH_SHORT).show();
-                }
-                progressBar.setVisibility(View.GONE);
-            }
-
-            @Override
-            public void onCancelled(@NonNull DatabaseError error) {
-                Toast.makeText(MainActivity.this, "Error: " + error.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        });
-        adapter = new ItemAdapter(this, gpturlArrayList);
-        recyclerView.setAdapter(adapter);
-    }
 
     private void startSystemAlertWindowPermission() {
         try {
             if (!Settings.canDrawOverlays(this)) {
-                Log.i("==TAG", "[startSystemAlertWindowPermission] requesting system alert window permission.");
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:" + getPackageName())));
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName())));
             }
         } catch (Exception e) {
             Log.e("==TAG", "[startSystemAlertWindowPermission] error:", e);
@@ -523,9 +453,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             GoogleSignInAccount account = completedTask.getResult(ApiException.class);
             mCredential.setSelectedAccountName(account.getEmail());
-//            if (Objects.equals(account.getEmail(), "celeblingo@gmail.com")) {
-                getResultsFromApi();
-//            }
+            getResultsFromApi();
         } catch (ApiException e) {
             Log.w("==TAG", "signInResult:failed code=" + e.getStatusCode());
         }
@@ -541,6 +469,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void getResultsFromApi() {
+        replaceFragment(getSupportFragmentManager(), new MeetingFragment(), R.id.fragment_container);
         makeRequestTask();
     }
 
@@ -550,23 +479,19 @@ public class MainActivity extends AppCompatActivity {
     Exception mLastError = null;
 
     private void makeRequestTask() {
-        // Show progress dialog on the main thread
         handler.post(() ->
                 Toast.makeText(this, "Loading...", Toast.LENGTH_SHORT).show());
 
         executor.submit(() -> {
             List<Meetings> result = null;
             try {
-                // This is your doInBackground equivalent
                 result = getDataFromCalendar();
             } catch (Exception e) {
                 mLastError = e;
             }
 
-            // This is your onPostExecute equivalent
             final List<Meetings> finalResult = result;
             handler.post(() -> {
-                // Hide progress dialog
                 if (finalResult == null || finalResult.isEmpty()) {
                     Log.d("Google", "No data");
                 } else {
@@ -577,7 +502,6 @@ public class MainActivity extends AppCompatActivity {
                     if (mLastError instanceof UserRecoverableAuthIOException) {
                         googleSignIn();
                     } else if (mLastError != null) {
-
                         Log.d("==er ", "The following error occurred:\n" + mLastError.getMessage());
                     } else {
                         Log.d("==err", "Request cancelled.");
@@ -596,6 +520,7 @@ public class MainActivity extends AppCompatActivity {
             String endTime = meetingsList.get(i).getEndTime().toString();
             String description = meetingsList.get(i).getDescription();
             String organizer = meetingsList.get(i).getOrganizer().getEmail();
+            String videoUrl = meetingsList.get(i).getVideoUrl();
             //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
             boolean self = meetingsList.get(i).getOrganizer().isSelf();
             HashMap<String, Object> eventHashMap = new HashMap<>();
@@ -604,6 +529,7 @@ public class MainActivity extends AppCompatActivity {
             eventHashMap.put("startTime", startTime);
             eventHashMap.put("endTime", endTime);
             eventHashMap.put("description", description);
+            eventHashMap.put("videoUrl", videoUrl);
             HashMap<String, Object> organizerHashMap = new HashMap<>();
             organizerHashMap.put("email", organizer);
             //organizerHashMap.put("displayName", displayName);
@@ -647,14 +573,11 @@ public class MainActivity extends AppCompatActivity {
                 if (end == null) {
                     end = event.getEnd().getDate();
                 }
-
-                // Step 1: Parse the RFC3339 string
                 OffsetDateTime odt = null;
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
                     odt = OffsetDateTime.parse(start.toString());
                     Date date = Date.from(odt.toInstant());
 
-                    // Step 3: Format using SimpleDateFormat
                     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
                     String formattedDate = sdf.format(date);
 
@@ -665,7 +588,7 @@ public class MainActivity extends AppCompatActivity {
 
                 List<Meetings.Attendee> attendees = new ArrayList<>();
                 for (EventAttendee attendee : attendeeList) {
-                    Log.d("==attendee", attendee.getEmail()+" : "+ attendee.getDisplayName()+" : "+ attendee.getResponseStatus());
+                    Log.d("==attendee", attendee.getEmail() + " : " + attendee.getDisplayName() + " : " + attendee.getResponseStatus());
                     attendees.add(new Meetings.Attendee(attendee.getEmail(), attendee.getDisplayName(), attendee.getResponseStatus()));
                 }
 

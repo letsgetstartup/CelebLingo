@@ -2,13 +2,17 @@ package com.celeblingo;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.widget.AppCompatButton;
 
 import android.annotation.SuppressLint;
+import android.app.Activity;
+import android.app.Dialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
@@ -17,28 +21,27 @@ import android.os.Handler;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
-import android.util.Base64;
 import android.util.Log;
 import android.view.ActionMode;
+import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.Window;
 import android.view.WindowManager;
-import android.webkit.ConsoleMessage;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
-import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
 
+import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.helper.DriveManager;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -46,26 +49,23 @@ import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccoun
 import com.google.api.services.drive.DriveScopes;
 import com.google.firebase.database.FirebaseDatabase;
 
-import java.io.ByteArrayOutputStream;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
-import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMenuItemClickListener {
+public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItemClickListener {
     private String url, type, meetingId;
     private WebView webView;
     private ProgressBar progressBar;
-    private Button closeBtn;
+    private ImageView closeBtn;
     private ImageView takeSSBtn;
     private TTSManager ttsManager;
     int paragraphCount;
     private String USER_AGENT = "(Android " + Build.VERSION.RELEASE + ") Chrome/110.0.5481.63 Mobile";
     private RelativeLayout relativeLayout;
-    private Button opeSettingBtn, reloadBtn;
+    private AppCompatButton opeSettingBtn, reloadBtn;
     private RelativeLayout rootLayout;
     private ImageView customIv;
     private Handler handler;
@@ -110,6 +110,7 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
         }
 
     }
+
     private void updateMeetingLinkInDB() {
         handler = new Handler();
         runnable = new Runnable() {
@@ -128,17 +129,49 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (handler !=null && runnable != null) {
+        if (handler != null && runnable != null) {
             handler.removeCallbacks(runnable);
         }
     }
 
+    public static void displayToastUnderView(Activity activity, View view, String text) {
+        Toast toast = Toast.makeText(activity, text, Toast.LENGTH_SHORT);
+        toast.setGravity(Gravity.TOP | Gravity.CENTER_HORIZONTAL,
+                0, view.getBottom());
+        toast.show();
+    }
+
     private void captureScreenshot() {
+        displayToastUnderView(this, takeSSBtn, "Save to drive");
         Bitmap bitmap = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         webView.draw(canvas);
+        showSaveImageDialog(bitmap);
+    }
 
-        createNewFolder(bitmap);
+    private void showSaveImageDialog(Bitmap bitmap) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_capture_screen);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCancelable(false);
+
+        ImageView screenShotImg = dialog.findViewById(R.id.capture_img);
+        AppCompatButton saveBtn = dialog.findViewById(R.id.save_img_btn);
+        AppCompatButton closeBtn = dialog.findViewById(R.id.close_capture_btn);
+
+        screenShotImg.setImageBitmap(bitmap);
+        saveBtn.setOnClickListener(view -> {
+            dialog.dismiss();
+            createNewFolder(bitmap);
+        });
+
+        closeBtn.setOnClickListener(view -> {
+            dialog.dismiss();
+        });
+
+        dialog.show();
     }
 
     private void createNewFolder(Bitmap bitmap) {
@@ -156,7 +189,7 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
                     WebViewActivity.this.runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(WebViewActivity.this, "Folder created successfully " + id, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(WebViewActivity.this, "Image saved successfully...", Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
@@ -179,20 +212,21 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
         @android.webkit.JavascriptInterface
         public void onWordSelected(String selectedWord, float left, float top, float width, float height) {
             runOnUiThread(new Runnable() {
+                @SuppressLint("UseCompatLoadingForDrawables")
                 @Override
                 public void run() {
                     float density = getResources().getDisplayMetrics().density;
                     int leftPx = (int) (left * density);
                     int topPx = (int) (top * density);
-                    int widthPx = (int) (100);
-                    int heightPx = (int) (80);
+                    int widthPx = (int) (150);
+                    int heightPx = (int) (150);
                     if (customIv != null) {
                         rootLayout.removeView(customIv);
                     }
                     customIv = new ImageView(WebViewActivity.this);
                     customIv.setImageResource(R.drawable.text_to_speech_icon);
-                    customIv.setBackground(getDrawable(R.drawable.rounded_btn_bg));
-                    customIv.setPadding(5, 5, 5, 5);
+                    customIv.setBackground(getDrawable(R.drawable.tts_icon_bg));
+                    customIv.setPadding(10, 10, 10, 10);
 
                     RelativeLayout.LayoutParams params = new RelativeLayout.LayoutParams(widthPx, heightPx);
                     params.rightMargin = leftPx;
@@ -446,16 +480,17 @@ public class WebViewActivity extends AppCompatActivity implements MenuItem.OnMen
             mActionMode = mode;
             Menu menu = mode.getMenu();
             menu.clear();
-            getMenuInflater().inflate(R.menu.custom_menu, menu);
-            List menuItems = new ArrayList<>();
-            for (int i = 0; i < menu.size(); i++) {
-                menuItems.add(menu.getItem(i));
-            }
-            menu.clear();
-            int size = menuItems.size();
-            for (int i = 0; i < size; i++) {
-                addMenuItem(menu, (MenuItem) menuItems.get(i), i, true);
-            }
+            mActionMode = null;
+//            getMenuInflater().inflate(R.menu.custom_menu, menu);
+//            List menuItems = new ArrayList<>();
+//            for (int i = 0; i < menu.size(); i++) {
+//                menuItems.add(menu.getItem(i));
+//            }
+//            menu.clear();
+//            int size = menuItems.size();
+//            for (int i = 0; i < size; i++) {
+//                addMenuItem(menu, (MenuItem) menuItems.get(i), i, true);
+//            }
             super.onActionModeStarted(mode);
         }
     }
