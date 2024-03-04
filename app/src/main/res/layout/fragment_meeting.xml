@@ -7,23 +7,33 @@
     android:orientation="vertical"
     tools:context=".fragment.MeetingFragment">
 
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appbar"
+    <com.google.android.material.button.MaterialButtonToggleGroup
+        android:id="@+id/toggleButton"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content">
+        android:layout_height="wrap_content"
+        android:weightSum="2"
+        app:singleSelection="true"
+        app:selectionRequired="true"
+        app:checkedButton="@id/upcoming_btn">
 
-        <com.google.android.material.tabs.TabLayout
-            android:id="@+id/tab_layout"
-            android:layout_width="match_parent"
+        <Button
+            style="?attr/materialButtonOutlinedStyle"
+            android:id="@+id/upcoming_btn"
+            android:layout_width="0dp"
+            android:layout_weight="1"
             android:layout_height="wrap_content"
-            app:tabBackground="@color/colorAccent"
-            app:tabIndicatorColor="@color/colorPrimaryDark"
-            app:tabIndicatorHeight="3dp"
-            app:tabMode="fixed"
-            app:tabSelectedTextColor="@color/colorPrimaryDark"
-            app:tabTextColor="#000" />
+            android:text="@string/upcoming"
+            />
+        <Button
+            style="?attr/materialButtonOutlinedStyle"
+            android:id="@+id/history_btn"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/history_title"
+            />
+    </com.google.android.material.button.MaterialButtonToggleGroup>
 
-    </com.google.android.material.appbar.AppBarLayout>
 
     <FrameLayout
         android:id="@+id/tabs_fragment_container"

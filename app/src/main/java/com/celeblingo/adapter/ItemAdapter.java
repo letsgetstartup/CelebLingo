@@ -73,7 +73,7 @@ public class ItemAdapter extends RecyclerView.Adapter<ItemAdapter.ViewHolder> {
                     .putExtra("type", "card"));
         });
 
-        getCardItemBGImages(position + 1, holder.slider);
+        //getCardItemBGImages(position + 1, holder.slider);
         Glide.with(context).load(gpturlArrayList.get(position).getImage())
                 .into(holder.itemImage);
     }

@@ -82,7 +82,7 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
             byte[] byteArray = outputStream.toByteArray();
 
             File fileMetadata = new File();
-            fileMetadata.setName(System.currentTimeMillis() + ".png");
+            fileMetadata.setName(System.currentTimeMillis() + ".jpg");
             if (FOLDER_ID != null) {
                 fileMetadata.setParents(Collections.singletonList(FOLDER_ID));
             }

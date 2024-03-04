@@ -313,7 +313,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
 
             @Override
             public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
-                Toast.makeText(WebViewActivity.this, "Error: " + error.getDescription(), Toast.LENGTH_SHORT).show();
+
             }
         });
     }

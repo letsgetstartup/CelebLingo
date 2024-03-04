@@ -11,26 +11,19 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.Log;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.Window;
 import android.view.WindowManager;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
 
-import com.celeblingo.adapter.MeetingAdapter;
 import com.celeblingo.fragment.HomeFragment;
 import com.celeblingo.fragment.MeetingFragment;
 import com.celeblingo.helper.BaseActivity;
@@ -43,8 +36,6 @@ import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
-import com.google.android.material.bottomsheet.BottomSheetDialog;
-import com.google.android.material.bottomsheet.BottomSheetDialogFragment;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException;
 import com.google.api.client.http.javanet.NetHttpTransport;
@@ -77,7 +68,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -95,6 +85,7 @@ public class MainActivity extends BaseActivity {
     private YouTubePlayerView youTubePlayerView;
     private String youtubeVideoId;
     private BottomNavigationView navigationView;
+    private String web_client= "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -233,7 +224,9 @@ public class MainActivity extends BaseActivity {
                                 assert organizer != null;
                                 Log.d("==organ", organizer.getEmail());
                                 if (organizer.getEmail().equals(account.getEmail())) {
-                                    dialog.show();
+                                    if (!isFinishing()) {
+                                        dialog.show();
+                                    }
                                 }
                                 organizerNameTxt.setText(organizer.getEmail());
                             }
@@ -282,6 +275,7 @@ public class MainActivity extends BaseActivity {
         if (youtubeVideoId.equals("NoId")) {
             youtubeVideoId = extractYTId(meetings.getVideoUrl());
         }
+        Log.d("==videoid", youtubeVideoId +"");
         youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
             @Override
             public void onReady(@NonNull com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer youTubePlayer) {
@@ -291,6 +285,12 @@ public class MainActivity extends BaseActivity {
             @Override
             public void onStateChange(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerState state) {
                 super.onStateChange(youTubePlayer, state);
+            }
+
+            @Override
+            public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
+                super.onError(youTubePlayer, error);
+                Log.d("==youtube", error +"");
             }
         });
     }
@@ -441,6 +441,7 @@ public class MainActivity extends BaseActivity {
                 .requestScopes(new Scope(CalendarScopes.CALENDAR_READONLY),
                         new Scope(CalendarScopes.CALENDAR_EVENTS_READONLY)
                         , new Scope(DriveScopes.DRIVE_FILE))
+                .requestIdToken(web_client)
                 .requestEmail()
                 .build();
         GoogleSignInClient mGoogleSignInClient = GoogleSignIn.getClient(this, gso);

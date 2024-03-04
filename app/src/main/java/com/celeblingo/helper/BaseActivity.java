@@ -13,6 +13,12 @@ import androidx.viewpager2.widget.ViewPager2;
 
 import com.celeblingo.R;
 import com.celeblingo.adapter.ScreensaverAdapter;
+import com.celeblingo.model.BGImages;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
 
@@ -71,14 +77,38 @@ public abstract class BaseActivity extends AppCompatActivity {
                 screensaverDialog = new Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
                 screensaverDialog.setContentView(R.layout.layout_screensaver);
                 viewPager = screensaverDialog.findViewById(R.id.viewPagerScreensaver);
-                imageUrls.add("https://firebasestorage.googleapis.com/v0/b/celeblingo-5cb9e.appspot.com/o/background_Images%2FbackgroundImge1.png?alt=media&token=e0a926e2-c143-4ac7-b509-b98e8079aebd");
-                imageUrls.add("https://firebasestorage.googleapis.com/v0/b/celeblingo-5cb9e.appspot.com/o/background_Images%2FbackgroundImge2.png?alt=media&token=e0a926e2-c143-4ac7-b509-b98e8079aebd");
                 adapter = new ScreensaverAdapter(this, imageUrls, position -> {
                     dismissScreensaver();
                 });
+                getImagesFromDB();
                 viewPager.setPageTransformer(new FadeInOutPageTransformer());
                 viewPager.setAdapter(adapter);
                 screensaverDialog.show();
+            }
+        });
+    }
+
+    private void getImagesFromDB() {
+        DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("BGImages");
+        reference.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()){
+                    for (DataSnapshot dataSnapshot : snapshot.getChildren()){
+                        BGImages bgImages = dataSnapshot.getValue(BGImages.class);
+                        assert bgImages != null;
+                        imageUrls.add(bgImages.getImage());
+                        adapter.notifyDataSetChanged();
+                    }
+                }else {
+                    imageUrls.add("https://firebasestorage.googleapis.com/v0/b/celeblingo-5cb9e.appspot.com/o/background_Images%2FbackgroundImge1.png?alt=media&token=e0a926e2-c143-4ac7-b509-b98e8079aebd");
+                    adapter.notifyDataSetChanged();
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
             }
         });
     }

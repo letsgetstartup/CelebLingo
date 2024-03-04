@@ -1,23 +1,21 @@
 package com.celeblingo.fragment;
 
 import android.os.Bundle;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
 
 import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
-import android.view.LayoutInflater;
-import android.view.View;
-import android.view.ViewGroup;
-import android.widget.FrameLayout;
-
 import com.celeblingo.R;
-import com.google.android.material.tabs.TabLayout;
+import com.google.android.material.button.MaterialButtonToggleGroup;
 
 
 public class MeetingFragment extends Fragment {
     private View rootView;
-    private TabLayout tabLayout;
+    private MaterialButtonToggleGroup toggleButton;
 
     public MeetingFragment() {
     }
@@ -39,38 +37,19 @@ public class MeetingFragment extends Fragment {
     }
 
     private void initViews() {
-        tabLayout = rootView.findViewById(R.id.tab_layout);
+        toggleButton = rootView.findViewById(R.id.toggleButton);
     }
 
     private void setUpMeetingTabs() {
-        tabLayout.addTab(tabLayout.newTab().setText(R.string.upcoming));
-        tabLayout.addTab(tabLayout.newTab().setText(R.string.history_title));
 
         replaceFragment(new UpcomingFragment());
 
-        tabLayout.addOnTabSelectedListener(new TabLayout.OnTabSelectedListener() {
-            @Override
-            public void onTabSelected(TabLayout.Tab tab) {
-                Fragment fragment = null;
-                switch (tab.getPosition()) {
-                    case 0:
-                        fragment = new UpcomingFragment();
-                        break;
-                    case 1:
-                        fragment = new HistoryFragment();
-                        break;
-                }
-                replaceFragment(fragment);
+        toggleButton.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
+            if (checkedId == R.id.upcoming_btn && isChecked){
+                replaceFragment(new UpcomingFragment());
             }
-
-            @Override
-            public void onTabUnselected(TabLayout.Tab tab) {
-
-            }
-
-            @Override
-            public void onTabReselected(TabLayout.Tab tab) {
-
+            if (checkedId == R.id.history_btn && isChecked){
+                replaceFragment(new HistoryFragment());
             }
         });
 
