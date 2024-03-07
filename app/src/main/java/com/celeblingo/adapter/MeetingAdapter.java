@@ -89,7 +89,7 @@ public class MeetingAdapter extends RecyclerView.Adapter<MeetingAdapter.ViewHold
         OffsetDateTime odt = null;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             odt = OffsetDateTime.parse(date);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E,MMM yyyy HH:mm");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E,dd MMM yyyy HH:mm");
             return odt.format(formatter);
         }
         return date;

@@ -1,9 +1,5 @@
 package com.celeblingo;
 
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.widget.AppCompatButton;
-
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
@@ -12,6 +8,7 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
@@ -27,8 +24,8 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.view.ViewTreeObserver;
 import android.view.Window;
-import android.view.WindowManager;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceError;
@@ -40,6 +37,9 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.widget.AppCompatButton;
 
 import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.helper.DriveManager;
@@ -70,12 +70,12 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
     private ImageView customIv;
     private Handler handler;
     private Runnable runnable;
+    private boolean isFullscreen = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_web_view);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
         url = getIntent().getStringExtra("url");
         type = getIntent().getStringExtra("type");
@@ -109,6 +109,37 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
             relativeLayout.setVisibility(View.VISIBLE);
         }
 
+        fullScreeObserver();
+
+    }
+
+    private void fullScreeObserver() {
+        // Monitor the layout for changes (e.g., keyboard showing/hiding)
+        final View contentView = findViewById(android.R.id.content);
+        contentView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
+            @Override
+            public void onGlobalLayout() {
+                Rect r = new Rect();
+                contentView.getWindowVisibleDisplayFrame(r);
+                int screenHeight = contentView.getRootView().getHeight();
+
+                // Determine if the keyboard is shown
+                int keypadHeight = screenHeight - r.bottom;
+                if (keypadHeight > 150) { // If more than 150 pixels, it's probably a keyboard.
+                    if (isFullscreen) {
+                        toggleFullscreen(false);
+                        isFullscreen = false;
+                    }
+                } else {
+                    if (!isFullscreen) {
+                        contentView.postDelayed(() -> {
+                            toggleFullscreen(true);
+                            isFullscreen = true;
+                        }, 200); // Delay to ensure smooth transition
+                    }
+                }
+            }
+        });
     }
 
     private void updateMeetingLinkInDB() {
@@ -274,6 +305,24 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
             });
         }
 
+        @JavascriptInterface
+        public void onInputFocus() {
+            runOnUiThread(() ->
+                    toggleFullscreen(false));
+        }
+
+    }
+
+    private void toggleFullscreen(boolean fullscreen) {
+        View decorView = getWindow().getDecorView();
+        if (fullscreen) {
+            decorView.setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        } else {
+            decorView.setSystemUiVisibility(View.SYSTEM_UI_FLAG_VISIBLE);
+        }
     }
 
     private void setWebViewClient() {
@@ -303,7 +352,6 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                 progressBar.setVisibility(View.GONE);
                 injectRtlScript(view);
                 injectTextSelectionScript(view);
-                //injectImgAtLineEndScript(view);
             }
 
             @Override
@@ -564,10 +612,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
 
     @Override
     protected void onResume() {
-        View decorView = getWindow().getDecorView();
-        int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_IMMERSIVE;
-        decorView.setSystemUiVisibility(uiOptions);
+        toggleFullscreen(true);
         ttsManager = new TTSManager(this);
         super.onResume();
     }

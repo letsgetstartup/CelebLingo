@@ -68,6 +68,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -85,7 +86,8 @@ public class MainActivity extends BaseActivity {
     private YouTubePlayerView youTubePlayerView;
     private String youtubeVideoId;
     private BottomNavigationView navigationView;
-    private String web_client= "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
+    private String web_client = "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
+    private boolean isIdExists = false, isSameOrganizer = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -275,7 +277,7 @@ public class MainActivity extends BaseActivity {
         if (youtubeVideoId.equals("NoId")) {
             youtubeVideoId = extractYTId(meetings.getVideoUrl());
         }
-        Log.d("==videoid", youtubeVideoId +"");
+        Log.d("==videoid", youtubeVideoId + "");
         youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
             @Override
             public void onReady(@NonNull com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer youTubePlayer) {
@@ -290,7 +292,7 @@ public class MainActivity extends BaseActivity {
             @Override
             public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
                 super.onError(youTubePlayer, error);
-                Log.d("==youtube", error +"");
+                Log.d("==youtube", error + "");
             }
         });
     }
@@ -299,7 +301,7 @@ public class MainActivity extends BaseActivity {
         OffsetDateTime odt = null;
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             odt = OffsetDateTime.parse(date);
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E,MMM yyyy HH:mm");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("E,dd MMM yyyy HH:mm");
             return odt.format(formatter);
         }
         return date;
@@ -549,6 +551,87 @@ public class MainActivity extends BaseActivity {
                 attendeeId = attendeeId + 1;
             }
         }
+        for (int i = 0; i < meetingsList.size(); i++) {
+            isIdExists = false;
+            isSameOrganizer = false;
+            String mId = meetingsList.get(i).getId();
+            String organizerEmail = meetingsList.get(i).getOrganizer().getEmail();
+            reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (snapshot.exists()) {
+                        for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                            Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                            reference.child(meetings.getId()).child("Organizer")
+                                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                                        @Override
+                                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                            if (snapshot.exists()) {
+                                                for (DataSnapshot dataSnapshot1 : snapshot.getChildren()) {
+                                                    isIdExists = false;
+                                                    isSameOrganizer = false;
+                                                    Meetings.Organizer organizer = dataSnapshot1.getValue(Meetings.Organizer.class);
+                                                    if (organizer.getEmail().equals(organizerEmail)) {
+                                                        isSameOrganizer = true;
+                                                        Date currentDate = new Date();
+
+                                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+                                                        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
+                                                        Date providedStartDate = null, providedEndDate = null;
+                                                        try {
+                                                            providedStartDate = dateFormat.parse(meetings.getStartTime());
+                                                            providedEndDate = dateFormat.parse(meetings.getEndTime());
+                                                        } catch (ParseException e) {
+                                                            Log.d("exception", Objects.requireNonNull(e.getMessage()));
+                                                        }
+                                                        if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
+                                                            if (mId.equals(meetings.getId())) {
+                                                                isIdExists = true;
+                                                            }
+                                                            long fiveMinutesBefore = currentDate.getTime() + (providedStartDate.getTime() - providedEndDate.getTime());
+                                                            if (!(currentDate.getTime() <= fiveMinutesBefore)) {
+                                                                Log.d("==test", "" + currentDate.getTime() + " " + fiveMinutesBefore);
+                                                                if (isSameOrganizer) {
+                                                                    isIdExists = true;
+                                                                }
+                                                            }
+                                                        } else if (currentDate.compareTo(providedStartDate) > 0) {
+                                                            if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
+                                                                if (mId.equals(meetings.getId())) {
+                                                                    isIdExists = true;
+                                                                }
+                                                            }
+                                                        }
+                                                        if (currentDate.compareTo(providedEndDate) > 0) {
+                                                            if (isSameOrganizer) {
+                                                                isIdExists = true;
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                if (isSameOrganizer && !isIdExists) {
+                                                    Log.d("==meeidc", meetings.getId() + " : " + mId);
+                                                    reference.child(meetings.getId()).removeValue();
+                                                }
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onCancelled(@NonNull DatabaseError error) {
+
+                                        }
+                                    });
+                        }
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+
+                }
+            });
+            return;
+        }
     }
 
     public List<Meetings> getDataFromCalendar() {
@@ -557,7 +640,7 @@ public class MainActivity extends BaseActivity {
 
         try {
             com.google.api.services.calendar.model.Events events = mService.events().list("primary")
-                    .setMaxResults(10)
+                    .setMaxResults(100)
                     .setTimeMin(now)
                     .setOrderBy("startTime")
                     .setSingleEvents(true)
@@ -588,9 +671,11 @@ public class MainActivity extends BaseActivity {
                 List<EventAttendee> attendeeList = event.getAttendees();
 
                 List<Meetings.Attendee> attendees = new ArrayList<>();
-                for (EventAttendee attendee : attendeeList) {
-                    Log.d("==attendee", attendee.getEmail() + " : " + attendee.getDisplayName() + " : " + attendee.getResponseStatus());
-                    attendees.add(new Meetings.Attendee(attendee.getEmail(), attendee.getDisplayName(), attendee.getResponseStatus()));
+                if (attendeeList != null) {
+                    for (EventAttendee attendee : attendeeList) {
+                        Log.d("==attendee", attendee.getEmail() + " : " + attendee.getDisplayName() + " : " + attendee.getResponseStatus());
+                        attendees.add(new Meetings.Attendee(attendee.getEmail(), attendee.getDisplayName(), attendee.getResponseStatus()));
+                    }
                 }
 
                 Event.Organizer organizerList = event.getOrganizer();

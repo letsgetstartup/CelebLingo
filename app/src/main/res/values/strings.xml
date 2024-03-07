@@ -15,7 +15,7 @@
     <string name="end_time">End Time</string>
     <string name="attendees">Attendees</string>
     <string name="join">Join</string>
-    <string name="no_data">No Upcoming Meetings</string>
+    <string name="no_data">No Upcoming Classes</string>
     <string name="title_home">Home</string>
     <string name="meeting">Class</string>
     <string name="sign_in">Sign In</string>
