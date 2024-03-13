@@ -1,5 +1,10 @@
 package com.celeblingo;
 
+import static com.celeblingo.helper.Constants.DEFAULT_DRIVE_URL;
+import static com.celeblingo.helper.Constants.DEFAULT_EVENT_DESCRIPTION;
+import static com.celeblingo.helper.Constants.DEFAULT_GPT_URL;
+import static com.celeblingo.helper.Constants.DEFAULT_VIDEO_URL;
+
 import android.annotation.SuppressLint;
 import android.app.Dialog;
 import android.content.Intent;
@@ -26,7 +31,10 @@ import androidx.fragment.app.FragmentTransaction;
 
 import com.celeblingo.fragment.HomeFragment;
 import com.celeblingo.fragment.MeetingFragment;
+import com.celeblingo.fragment.StartFragment;
 import com.celeblingo.helper.BaseActivity;
+import com.celeblingo.helper.Constants;
+import com.celeblingo.helper.Utils;
 import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
@@ -87,7 +95,7 @@ public class MainActivity extends BaseActivity {
     private String youtubeVideoId;
     private BottomNavigationView navigationView;
     private String web_client = "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
-    private boolean isIdExists = false, isSameOrganizer = false;
+    private boolean isIdExists = false, isSameOrganizer = false, isMeetingIdExist = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -104,8 +112,8 @@ public class MainActivity extends BaseActivity {
     }
 
     private void setUpBottomNavView() {
-        navigationView.setSelectedItemId(R.id.navigation_home);
-        replaceFragment(getSupportFragmentManager(), new HomeFragment(), R.id.fragment_container);
+        navigationView.setSelectedItemId(R.id.navigation_start);
+        replaceFragment(getSupportFragmentManager(), new StartFragment(), R.id.fragment_container);
         navigationView.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.navigation_home) {
@@ -131,7 +139,8 @@ public class MainActivity extends BaseActivity {
                     googleSignIn();
                 }
                 return true;
-            } else if (id == R.id.navigation_exit) {
+            } else if (id == R.id.navigation_start) {
+                replaceFragment(getSupportFragmentManager(), new StartFragment(), R.id.fragment_container);
                 return true;
             }
             return false;
@@ -271,7 +280,7 @@ public class MainActivity extends BaseActivity {
                 " - " +
                 extractTime(meetings.getEndTime()));
         endTimeTxt.setText(extractDateTime(meetings.getEndTime()));
-        joinMeetingUrl = meetings.getDescription();
+        joinMeetingUrl = meetings.getGptUrl();
         meetingId = meetings.getId();
         youtubeVideoId = extractVideoId(meetings.getVideoUrl());
         if (youtubeVideoId.equals("NoId")) {
@@ -383,6 +392,9 @@ public class MainActivity extends BaseActivity {
     }
 
     public static String extractUrl(String input) {
+        if (input == null){
+            return DEFAULT_GPT_URL;
+        }
         String htmlPattern = "<a[^>]+href=\"(.*?)\"[^>]*>(.*?)</a>";
         String plainUrlPattern = "https?://[^\\s]+";
 
@@ -397,7 +409,7 @@ public class MainActivity extends BaseActivity {
             return matcher.group(0);
         }
 
-        return null;
+        return DEFAULT_GPT_URL;
     }
 
     @Override
@@ -517,39 +529,69 @@ public class MainActivity extends BaseActivity {
     private void saveMeetingDataToFirebase(List<Meetings> meetingsList) {
         DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
         for (int i = 0; i < meetingsList.size(); i++) {
+            isMeetingIdExist = false;
+
             String id = meetingsList.get(i).getId();
-            String summary = meetingsList.get(i).getSummary();
-            String startTime = meetingsList.get(i).getStartTime().toString();
-            String endTime = meetingsList.get(i).getEndTime().toString();
-            String description = meetingsList.get(i).getDescription();
-            String organizer = meetingsList.get(i).getOrganizer().getEmail();
-            String videoUrl = meetingsList.get(i).getVideoUrl();
-            //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
-            boolean self = meetingsList.get(i).getOrganizer().isSelf();
-            HashMap<String, Object> eventHashMap = new HashMap<>();
-            eventHashMap.put("id", id);
-            eventHashMap.put("summary", summary);
-            eventHashMap.put("startTime", startTime);
-            eventHashMap.put("endTime", endTime);
-            eventHashMap.put("description", description);
-            eventHashMap.put("videoUrl", videoUrl);
-            HashMap<String, Object> organizerHashMap = new HashMap<>();
-            organizerHashMap.put("email", organizer);
-            //organizerHashMap.put("displayName", displayName);
-            organizerHashMap.put("self", self);
-            reference.child(id).updateChildren(eventHashMap);
-            reference.child(id).child("Organizer")
-                    .child(1 + "").updateChildren(organizerHashMap);
-            int attendeeId = 1;
-            for (Meetings.Attendee attendee : meetingsList.get(i).getAttendees()) {
-                HashMap<String, Object> attendeeHashMap = new HashMap<>();
-                attendeeHashMap.put("email", attendee.getEmail());
-                attendeeHashMap.put("displayName", attendee.getDisplayName());
-                attendeeHashMap.put("responseStatus", attendee.getResponseStatus());
-                reference.child(id).child("Attendees")
-                        .child(attendeeId + "").updateChildren(attendeeHashMap);
-                attendeeId = attendeeId + 1;
-            }
+            int finalI = i;
+            reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    isMeetingIdExist = false;
+                    if (snapshot.exists()){
+                        for (DataSnapshot dataSnapshot : snapshot.getChildren()){
+                            Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                            assert meetings != null;
+                            if (meetings.getId().equals(id)){
+                                isMeetingIdExist = true;
+                            }
+                        }
+                    }
+
+                    if (!isMeetingIdExist) {
+                        String summary = meetingsList.get(finalI).getSummary();
+                        String startTime = meetingsList.get(finalI).getStartTime();
+                        String endTime = meetingsList.get(finalI).getEndTime();
+                        String description = meetingsList.get(finalI).getDescription();
+                        String organizer = meetingsList.get(finalI).getOrganizer().getEmail();
+                        String gptUrl = meetingsList.get(finalI).getGptUrl();
+                        String driveUrl = meetingsList.get(finalI).getDriveUrl();
+                        String videoUrl = meetingsList.get(finalI).getVideoUrl();
+                        //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
+                        boolean self = meetingsList.get(finalI).getOrganizer().isSelf();
+                        HashMap<String, Object> eventHashMap = new HashMap<>();
+                        eventHashMap.put("id", id);
+                        eventHashMap.put("summary", summary);
+                        eventHashMap.put("startTime", startTime);
+                        eventHashMap.put("endTime", endTime);
+                        eventHashMap.put("description", description);
+                        eventHashMap.put("gptUrl", gptUrl);
+                        eventHashMap.put("driveUrl",driveUrl);
+                        eventHashMap.put("videoUrl", videoUrl);
+                        HashMap<String, Object> organizerHashMap = new HashMap<>();
+                        organizerHashMap.put("email", organizer);
+                        //organizerHashMap.put("displayName", displayName);
+                        organizerHashMap.put("self", self);
+                        reference.child(id).updateChildren(eventHashMap);
+                        reference.child(id).child("Organizer")
+                                .child(1 + "").updateChildren(organizerHashMap);
+                        int attendeeId = 1;
+                        for (Meetings.Attendee attendee : meetingsList.get(finalI).getAttendees()) {
+                            HashMap<String, Object> attendeeHashMap = new HashMap<>();
+                            attendeeHashMap.put("email", attendee.getEmail());
+                            attendeeHashMap.put("displayName", attendee.getDisplayName());
+                            attendeeHashMap.put("responseStatus", attendee.getResponseStatus());
+                            reference.child(id).child("Attendees")
+                                    .child(attendeeId + "").updateChildren(attendeeHashMap);
+                            attendeeId = attendeeId + 1;
+                        }
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+
+                }
+            });
         }
         for (int i = 0; i < meetingsList.size(); i++) {
             isIdExists = false;
@@ -640,7 +682,7 @@ public class MainActivity extends BaseActivity {
 
         try {
             com.google.api.services.calendar.model.Events events = mService.events().list("primary")
-                    .setMaxResults(100)
+                    .setMaxResults(20)
                     .setTimeMin(now)
                     .setOrderBy("startTime")
                     .setSingleEvents(true)
@@ -657,16 +699,6 @@ public class MainActivity extends BaseActivity {
                 if (end == null) {
                     end = event.getEnd().getDate();
                 }
-                OffsetDateTime odt = null;
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    odt = OffsetDateTime.parse(start.toString());
-                    Date date = Date.from(odt.toInstant());
-
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    String formattedDate = sdf.format(date);
-
-                    System.out.println("Formatted Date: " + formattedDate);
-                }
 
                 List<EventAttendee> attendeeList = event.getAttendees();
 
@@ -680,10 +712,20 @@ public class MainActivity extends BaseActivity {
 
                 Event.Organizer organizerList = event.getOrganizer();
                 Meetings.Organizer organizer = new Meetings.Organizer(organizerList.getEmail(), organizerList.getSelf());
-
+                String gptUrl = DEFAULT_GPT_URL, driveUrl = DEFAULT_DRIVE_URL, videoUrl = DEFAULT_VIDEO_URL;
+                String eventDescription = event.getDescription();
+                if (eventDescription != null) {
+                    gptUrl = Utils.extractUrl(event.getDescription(), "gptUrl:", DEFAULT_GPT_URL);
+                    driveUrl = Utils.extractUrl(event.getDescription(), "driveUrl:", DEFAULT_DRIVE_URL);
+                    videoUrl = Utils.extractUrl(event.getDescription(), "videoUrl:", DEFAULT_VIDEO_URL);
+                }else {
+                    eventDescription = DEFAULT_EVENT_DESCRIPTION;
+                }
 
                 Meetings model = new Meetings(event.getId(), event.getSummary(),
-                        event.getDescription(), start.toString(), end.toString(), "https://youtu.be/qYKKUbJqiHI", attendees, organizer);
+                        eventDescription, start.toString(), end.toString(),
+                        gptUrl, driveUrl, videoUrl,
+                        attendees, organizer);
                 eventModels.add(model);
             }
         } catch (IOException e) {

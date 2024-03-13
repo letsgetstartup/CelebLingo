@@ -64,7 +64,7 @@ public class MeetingAdapter extends RecyclerView.Adapter<MeetingAdapter.ViewHold
             youtubeVideoId = extractYTId(meetings.getVideoUrl());
         }
         holder.joinBtn.setOnClickListener(view -> {
-            String url = extractUrl(meetings.getDescription());
+            String url = extractUrl(meetings.getGptUrl());
             Log.d("==url", url + " ");
             context.startActivity(new Intent(context, WebViewActivity.class)
                     .putExtra("url", url)

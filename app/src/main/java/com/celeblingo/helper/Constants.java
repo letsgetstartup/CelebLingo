@@ -1,11 +1,9 @@
 package com.celeblingo.helper;
 
 public final class Constants {
-
-    public static final int REQUEST_ACCOUNT_PICKER = 1000;
-    public static final int REQUEST_AUTHORIZATION = 1001;
-    public static final int REQUEST_GOOGLE_PLAY_SERVICES = 1002;
-    public static final int REQUEST_PERMISSION_GET_ACCOUNTS = 1003;
-    public static final String PREF_ACCOUNT_NAME = "getCalendarEvent";
+    public static final String DEFAULT_GPT_URL = "https://chat.openai.com/g/g-81piKCao7-boti-2-0";
+    public static final String DEFAULT_DRIVE_URL = "https://drive.google.com/drive/home";
+    public static final String DEFAULT_VIDEO_URL = "https://youtu.be/Q1EbiKjXHaA";
+    public static final String DEFAULT_EVENT_DESCRIPTION = "gptUrl: <a href=\"https://chat.openai.com/g/g-2JGOQAO8Z-vocbot-0-1\">https://chat.openai.com/g/g-2JGOQAO8Z-vocbot-0-1</a><br>driveUrl: <a href=\"https://drive.google.com/drive/home\">https://drive.google.com/drive/home</a><br>videoUrl: <a href=\"https://youtu.be/qYKKUbJqiHI\">https://youtu.be/qYKKUbJqiHI</a>";
 }
 

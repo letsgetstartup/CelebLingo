@@ -10,6 +10,7 @@ import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
+import com.google.firebase.database.FirebaseDatabase;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,10 +23,12 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
     private final String mFolderName;
     private final Bitmap bitmap;
     private final String mParentFolderId;
+    private final String meetingId;
     private final DriveTaskListener mListener;
 
     public DriveManager(GoogleAccountCredential credential, String folderName,
-                        Bitmap bitmap, String parentFolderId, DriveTaskListener listener) {
+                        Bitmap bitmap, String parentFolderId,
+                        String meetingId, DriveTaskListener listener) {
         mDriveService = new Drive.Builder(
                 new NetHttpTransport(),
                 new GsonFactory(),
@@ -34,6 +37,7 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                 .build();
         mFolderName = folderName;
         mParentFolderId = parentFolderId;
+        this.meetingId = meetingId;
         mListener = listener;
         this.bitmap = bitmap;
     }
@@ -51,8 +55,15 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                     }
 
                     File folder = mDriveService.files().create(fileMetadata)
-                            .setFields("id")
+                            .setFields("id, webViewLink")
                             .execute();
+                    if (meetingId != null){
+                        String folderLink = folder.getWebViewLink();
+                        Log.d("==driveFolder", folderLink);
+                        FirebaseDatabase.getInstance().getReference().child("Meetings")
+                                .child(meetingId).child("driveUrl")
+                                .setValue(folderLink);
+                    }
                     uploadDrawableToDrive(folder.getId(), mDriveService, bitmap);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -63,6 +74,13 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                 return null;
             } else {
                 Log.d("==drive", "folder exists " + getExistingFolderId(mFolderName));
+                if (meetingId != null){
+                    String folderLink = getExistingFolderUrl(mFolderName);
+                    Log.d("==driveFoldere", folderLink);
+                    FirebaseDatabase.getInstance().getReference().child("Meetings")
+                            .child(meetingId).child("driveUrl")
+                            .setValue(folderLink);
+                }
                 uploadDrawableToDrive(getExistingFolderId(mFolderName), mDriveService, bitmap);
             }
         } catch (IOException e) {
@@ -122,6 +140,19 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
             return files.get(0).getId();
         }
         return null;
+    }
+
+    private String getExistingFolderUrl(String folderName) throws IOException {
+        List<File> files = mDriveService.files().list()
+                .setQ("mimeType='application/vnd.google-apps.folder' and name='" + folderName + "' and trashed=false")
+                .setSpaces("drive")
+                .setFields("files(id, name, webViewLink)")
+                .execute()
+                .getFiles();
+        if (!files.isEmpty()) {
+            return files.get(0).getWebViewLink();
+        }
+        return Constants.DEFAULT_DRIVE_URL;
     }
 
     public interface DriveTaskListener {

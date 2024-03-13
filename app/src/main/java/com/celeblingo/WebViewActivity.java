@@ -43,11 +43,16 @@ import androidx.appcompat.widget.AppCompatButton;
 
 import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.helper.DriveManager;
+import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.services.drive.DriveScopes;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
 import java.text.SimpleDateFormat;
 import java.util.Collections;
@@ -56,7 +61,7 @@ import java.util.Locale;
 import java.util.UUID;
 
 public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItemClickListener {
-    private String url, type, meetingId;
+    private String url, type, meetingId, meetingName;
     private WebView webView;
     private ProgressBar progressBar;
     private ImageView closeBtn;
@@ -95,6 +100,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
 
         if (type != null) {
             if (type.equals("meeting")) {
+                getMeetingName();
                 updateMeetingLinkInDB();
             }
         }
@@ -111,6 +117,29 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
 
         fullScreeObserver();
 
+    }
+
+    private void getMeetingName() {
+        DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
+        reference.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot snapshot) {
+                if (snapshot.exists()){
+                    for (DataSnapshot dataSnapshot : snapshot.getChildren()){
+                        Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                        assert meetings != null;
+                        if (meetings.getId().equals(meetingId)){
+                            meetingName = meetings.getSummary();
+                        }
+                    }
+                }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError error) {
+
+            }
+        });
     }
 
     private void fullScreeObserver() {
@@ -148,9 +177,33 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
             @Override
             public void run() {
                 if (meetingId != null) {
-                    FirebaseDatabase.getInstance().getReference().child("Meetings")
-                            .child(meetingId).child("description")
-                            .setValue(webView.getUrl());
+//                    FirebaseDatabase.getInstance().getReference().child("Meetings")
+//                            .child(meetingId).child("description")
+//                            .setValue(webView.getUrl());
+                    DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
+                    reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                        @Override
+                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                            if (snapshot.exists()) {
+                                for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                                    Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                                    String upToNCharacters = meetingId.substring(0, Math.min(meetingId.length(), 24));
+                                    assert meetings != null;
+                                    if (meetings.getId().contains(upToNCharacters)) {
+                                        Log.d("==nch", upToNCharacters);
+                                        reference.child(meetings.getId())
+                                                .child("gptUrl")
+                                                .setValue(webView.getUrl());
+                                    }
+                                }
+                            }
+                        }
+
+                        @Override
+                        public void onCancelled(@NonNull DatabaseError error) {
+
+                        }
+                    });
                 }
             }
         };
@@ -213,8 +266,21 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                             this, Collections.singleton(DriveScopes.DRIVE_FILE));
             credential.setSelectedAccount(account.getAccount());
             @SuppressLint("SimpleDateFormat") SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
-            String folderName = dateFormatter.format(new Date());
-            DriveManager driveManager = new DriveManager(credential, folderName, bitmap, null, new DriveManager.DriveTaskListener() {
+            String folderName;
+            if (type != null) {
+                if (type.equals("meeting")) {
+                    if (meetingName != null) {
+                        folderName = meetingName;
+                    }else {
+                        folderName = dateFormatter.format(new Date());
+                    }
+                }else {
+                    folderName = dateFormatter.format(new Date());
+                }
+            } else {
+                folderName = dateFormatter.format(new Date());
+            }
+            DriveManager driveManager = new DriveManager(credential, folderName, bitmap, null, meetingId, new DriveManager.DriveTaskListener() {
                 @Override
                 public void onDriveTaskCompleted(String id) {
                     WebViewActivity.this.runOnUiThread(new Runnable() {
