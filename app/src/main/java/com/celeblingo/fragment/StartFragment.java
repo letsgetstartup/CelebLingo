@@ -39,7 +39,11 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.Objects;
 import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -53,6 +57,8 @@ public class StartFragment extends Fragment {
     private String meetingId, joinMeetingUrl = null;
     private TextView noDataText;
     private RelativeLayout meetingLyt;
+    private ArrayList<Meetings> meetingsArrayList = new ArrayList<>();
+    private boolean isDialogShowing = false;
 
 
     public StartFragment() {
@@ -103,10 +109,17 @@ public class StartFragment extends Fragment {
     private void getMeetingData() {
         Activity activity = getActivity();
         if (isAdded() && activity != null) {
+            GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(requireActivity());
+            if (account == null) {
+                noDataText.setVisibility(View.VISIBLE);
+                meetingLyt.setVisibility(View.GONE);
+                return;
+            }
             DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
             reference.addValueEventListener(new ValueEventListener() {
                 @Override
                 public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    isDialogShowing = false;
                     noDataText.setVisibility(View.VISIBLE);
                     meetingLyt.setVisibility(View.GONE);
                     if (snapshot.exists()) {
@@ -114,13 +127,186 @@ public class StartFragment extends Fragment {
                             Meetings meetings = dataSnapshot.getValue(Meetings.class);
                             assert meetings != null;
                             Log.d("==event ", meetings.getId());
-                            if (compareDate(meetings.getStartTime(), meetings.getEndTime())) {
-                                noDataText.setVisibility(View.GONE);
-                                meetingLyt.setVisibility(View.VISIBLE);
-                                setMeetingDataToDialog(reference, meetings);
-                                return;
-                            }
+                            reference.child(meetings.getId()).child("Organizer")
+                                    .addListenerForSingleValueEvent(new ValueEventListener() {
+                                        @Override
+                                        public void onDataChange(@NonNull DataSnapshot snapshot) {
+                                            if (snapshot.exists()) {
+                                                for (DataSnapshot dataSnapshot1 : snapshot.getChildren()) {
+                                                    Meetings.Organizer organizer = dataSnapshot1.getValue(Meetings.Organizer.class);
+                                                    if (organizer.getEmail().equals(account.getEmail())) {
+                                                        if (compareDate(meetings.getStartTime(), meetings.getEndTime())) {
+                                                            isDialogShowing = true;
+                                                            noDataText.setVisibility(View.GONE);
+                                                            meetingLyt.setVisibility(View.VISIBLE);
+                                                            setMeetingDataToDialog(reference, meetings);
+                                                            return;
+                                                        }else {
+                                                            Date currentDate = new Date();
 
+                                                            DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+                                                            dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
+                                                            Date providedStartDate = null, providedEndDate = null;
+                                                            try {
+                                                                providedStartDate = dateFormat.parse(meetings.getStartTime());
+                                                                providedEndDate = dateFormat.parse(meetings.getEndTime());
+                                                            } catch (ParseException e) {
+                                                                Log.d("exception", Objects.requireNonNull(e.getMessage()));
+                                                            }
+                                                            if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
+                                                                meetingsArrayList.add(meetings);
+                                                                meetingsArrayList.sort(new Comparator<Meetings>() {
+                                                                    @Override
+                                                                    public int compare(Meetings t1, Meetings t2) {
+                                                                        try {
+                                                                            Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                                    .parse(t1.getStartTime());
+                                                                            Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                                    .parse(t2.getStartTime());
+                                                                            Log.d("==sts", start + " " + end);
+                                                                            assert end != null;
+                                                                            return end.compareTo(start);
+                                                                        } catch (ParseException e) {
+                                                                            return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+                                                                        }
+                                                                    }
+                                                                });
+                                                            } else if (currentDate.compareTo(providedStartDate) > 0) {
+                                                                if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
+                                                                    meetingsArrayList.add(meetings);
+                                                                    meetingsArrayList.sort(new Comparator<Meetings>() {
+                                                                        @Override
+                                                                        public int compare(Meetings t1, Meetings t2) {
+                                                                            try {
+                                                                                Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                                        .parse(t1.getStartTime());
+                                                                                Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                                        .parse(t2.getStartTime());
+                                                                                Log.d("==sts", start + " " + end);
+                                                                                assert end != null;
+                                                                                return end.compareTo(start);
+                                                                            } catch (
+                                                                                    ParseException e) {
+                                                                                return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+                                                                            }
+                                                                        }
+                                                                    });
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        @Override
+                                        public void onCancelled(@NonNull DatabaseError error) {
+
+                                        }
+                                    });
+
+
+                            ///////////////// before
+//                            if (compareDate(meetings.getStartTime(), meetings.getEndTime())) {
+//                                isDialogShowing = true;
+//                                noDataText.setVisibility(View.GONE);
+//                                meetingLyt.setVisibility(View.VISIBLE);
+//                                setMeetingDataToDialog(reference, meetings);
+//                                return;
+//                            }
+//                            else {
+//                                Log.d("==start", "here");
+//                                reference.child(meetings.getId()).child("Organizer")
+//                                        .addListenerForSingleValueEvent(new ValueEventListener() {
+//                                            @Override
+//                                            public void onDataChange(@NonNull DataSnapshot snapshot) {
+//                                                if (snapshot.exists()) {
+//                                                    for (DataSnapshot dataSnapshot1 : snapshot.getChildren()) {
+//                                                        Log.d("==start", "ord data");
+//                                                        Meetings.Organizer organizer = dataSnapshot1.getValue(Meetings.Organizer.class);
+//                                                        if (organizer.getEmail().equals(account.getEmail())) {
+//                                                            Log.d("==start", "account ema");
+//                                                            Date currentDate = new Date();
+//
+//                                                            DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+//                                                            dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
+//                                                            Date providedStartDate = null, providedEndDate = null;
+//                                                            try {
+//                                                                providedStartDate = dateFormat.parse(meetings.getStartTime());
+//                                                                providedEndDate = dateFormat.parse(meetings.getEndTime());
+//                                                            } catch (ParseException e) {
+//                                                                Log.d("exception", Objects.requireNonNull(e.getMessage()));
+//                                                            }
+//                                                            if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
+//                                                                meetingsArrayList.add(meetings);
+//                                                                meetingsArrayList.sort(new Comparator<Meetings>() {
+//                                                                    @Override
+//                                                                    public int compare(Meetings t1, Meetings t2) {
+//                                                                        try {
+//                                                                            Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+//                                                                                    .parse(t1.getStartTime());
+//                                                                            Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+//                                                                                    .parse(t2.getStartTime());
+//                                                                            Log.d("==sts", start + " " + end);
+//                                                                            assert end != null;
+//                                                                            return end.compareTo(start);
+//                                                                        } catch (ParseException e) {
+//                                                                            return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+//                                                                        }
+//                                                                    }
+//                                                                });
+//                                                            } else if (currentDate.compareTo(providedStartDate) > 0) {
+//                                                                if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
+//                                                                    meetingsArrayList.add(meetings);
+//                                                                    meetingsArrayList.sort(new Comparator<Meetings>() {
+//                                                                        @Override
+//                                                                        public int compare(Meetings t1, Meetings t2) {
+//                                                                            try {
+//                                                                                Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+//                                                                                        .parse(t1.getStartTime());
+//                                                                                Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+//                                                                                        .parse(t2.getStartTime());
+//                                                                                Log.d("==sts", start + " " + end);
+//                                                                                assert end != null;
+//                                                                                return end.compareTo(start);
+//                                                                            } catch (
+//                                                                                    ParseException e) {
+//                                                                                return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+//                                                                            }
+//                                                                        }
+//                                                                    });
+//                                                                }
+//                                                            }
+//                                                        }
+//                                                    }
+//                                                    Log.d("==start", "lis" + meetingsArrayList.size());
+//                                                }
+//                                            }
+//
+//                                            @Override
+//                                            public void onCancelled(@NonNull DatabaseError error) {
+//
+//                                            }
+//                                        });
+//                            }
+
+                        }
+                        if (!isDialogShowing) {
+                            new Handler().postDelayed(new Runnable() {
+                                @Override
+                                public void run() {
+                                    if (!meetingsArrayList.isEmpty()) {
+                                        Collections.reverse(meetingsArrayList);
+                                        Log.d("==listreve", meetingsArrayList.get(0).getStartTime());
+                                        if (compareDate(meetingsArrayList.get(0).getEndTime())) {
+                                            isDialogShowing = true;
+                                            noDataText.setVisibility(View.GONE);
+                                            meetingLyt.setVisibility(View.VISIBLE);
+                                            setMeetingDataToDialog(reference, meetingsArrayList.get(0));
+                                        }
+                                    }
+                                }
+                            }, 2000);
                         }
                     }
                 }
@@ -155,14 +341,38 @@ public class StartFragment extends Fragment {
                     return true;
                 }
                 if (currentDate.compareTo(providedDate) > 0) {
-                    if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
-                        return true;
-                    }
+                    return currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0;
                 }
                 return false;
             } else {
                 System.out.println("Current date and time is equal to the provided datetime.");
                 return true;
+
+            }
+        } catch (ParseException e) {
+            //e.printStackTrace();
+            return false;
+        }
+
+    }
+
+    private boolean compareDate(String startDate) {
+        Date currentDate = new Date();
+
+        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
+        Date providedDate = null;
+        try {
+            providedDate = dateFormat.parse(startDate);
+            if (currentDate.compareTo(providedDate) < 0) {
+                System.out.println("Current date and time is before the provided datetime.");
+                return true;
+            } else if (currentDate.compareTo(providedDate) > 0) {
+                System.out.println("Current date and time is after the provided datetime.");
+                return false;
+            } else {
+                System.out.println("Current date and time is equal to the provided datetime.");
+                return false;
 
             }
         } catch (ParseException e) {
@@ -254,6 +464,7 @@ public class StartFragment extends Fragment {
                 public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
                     super.onError(youTubePlayer, error);
                     Log.d("==youtube", error + "");
+                    youTubePlayer.loadVideo(youtubeVideoId, 0);
                 }
             });
         }
@@ -302,7 +513,6 @@ public class StartFragment extends Fragment {
         }
         return "NoId";
     }
-
 
 
 }

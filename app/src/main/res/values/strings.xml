@@ -29,4 +29,5 @@
     <string name="save">Save</string>
     <string name="start">Start</string>
     <string name="no_ongoing_class">No Ongoing Class</string>
+    <string name="close_chat">Close Chat</string>
 </resources>

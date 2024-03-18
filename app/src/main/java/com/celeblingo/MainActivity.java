@@ -36,16 +36,21 @@ import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.helper.Constants;
 import com.celeblingo.helper.Utils;
 import com.celeblingo.model.Meetings;
+import com.google.android.gms.auth.GoogleAuthException;
+import com.google.android.gms.auth.GoogleAuthUtil;
+import com.google.android.gms.auth.UserRecoverableAuthException;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.auth.api.signin.GoogleSignInClient;
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions;
+import com.google.android.gms.auth.api.signin.GoogleSignInStatusCodes;
 import com.google.android.gms.common.api.ApiException;
 import com.google.android.gms.common.api.Scope;
 import com.google.android.gms.tasks.Task;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.googleapis.extensions.android.gms.auth.UserRecoverableAuthIOException;
+import com.google.api.client.googleapis.json.GoogleJsonResponseException;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.util.DateTime;
@@ -84,7 +89,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends BaseActivity {
-    private static final int RC_SIGN_IN = 121;
+    private static final int RC_SIGN_IN = 121, REQUEST_AUTHORIZATION = 1001;;
     private GoogleAccountCredential mCredential = null;
     private com.google.api.services.calendar.Calendar mService;
     private String meetingId, joinMeetingUrl = null;
@@ -96,6 +101,7 @@ public class MainActivity extends BaseActivity {
     private BottomNavigationView navigationView;
     private String web_client = "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
     private boolean isIdExists = false, isSameOrganizer = false, isMeetingIdExist = false;
+    private GoogleSignInClient mGoogleSignInClient;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,6 +114,7 @@ public class MainActivity extends BaseActivity {
         setUpBottomNavView();
         startSystemAlertWindowPermission();
         showJoinMeetingDialog();
+        Utils.getDefaultUrlsFromFB();
 
     }
 
@@ -302,6 +309,7 @@ public class MainActivity extends BaseActivity {
             public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
                 super.onError(youTubePlayer, error);
                 Log.d("==youtube", error + "");
+                youTubePlayer.loadVideo(youtubeVideoId, 0);
             }
         });
     }
@@ -435,7 +443,8 @@ public class MainActivity extends BaseActivity {
 
     private void initCredentials() {
         mCredential = GoogleAccountCredential.usingOAuth2(
-                        this, Arrays.asList(CalendarScopes.CALENDAR_READONLY))
+                        this, Arrays.asList(CalendarScopes.CALENDAR,
+                                CalendarScopes.CALENDAR_READONLY))
                 .setBackOff(new ExponentialBackOff());
         initCalendarBuild(mCredential);
     }
@@ -453,12 +462,13 @@ public class MainActivity extends BaseActivity {
     private void googleSignIn() {
         GoogleSignInOptions gso = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
                 .requestScopes(new Scope(CalendarScopes.CALENDAR_READONLY),
+                        new Scope(CalendarScopes.CALENDAR),
                         new Scope(CalendarScopes.CALENDAR_EVENTS_READONLY)
                         , new Scope(DriveScopes.DRIVE_FILE))
                 .requestIdToken(web_client)
                 .requestEmail()
                 .build();
-        GoogleSignInClient mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
+        mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
 
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
         startActivityForResult(signInIntent, RC_SIGN_IN);
@@ -470,7 +480,13 @@ public class MainActivity extends BaseActivity {
             mCredential.setSelectedAccountName(account.getEmail());
             getResultsFromApi();
         } catch (ApiException e) {
-            Log.w("==TAG", "signInResult:failed code=" + e.getStatusCode());
+            if (e.getStatusCode() == GoogleSignInStatusCodes.SIGN_IN_REQUIRED) {
+                // Consent required, attempt to get consent
+                Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+                startActivityForResult(signInIntent, REQUEST_AUTHORIZATION);
+            } else {
+                Log.w("SignInError", "signInResult:failed code=" + e.getStatusCode());
+            }
         }
     }
 
@@ -480,6 +496,15 @@ public class MainActivity extends BaseActivity {
         if (requestCode == RC_SIGN_IN) {
             Task<GoogleSignInAccount> task = GoogleSignIn.getSignedInAccountFromIntent(data);
             handleSignInResult(task);
+        }
+        if (requestCode == REQUEST_AUTHORIZATION) {
+            if (resultCode == RESULT_OK) {
+                // Consent granted, try to obtain the token again.
+                getAuthToken();
+            } else {
+                // User denied consent.
+                Log.e("AuthError", "User denied consent.");
+            }
         }
     }
 
@@ -516,7 +541,9 @@ public class MainActivity extends BaseActivity {
                 if (mLastError != null) {
                     if (mLastError instanceof UserRecoverableAuthIOException) {
                         googleSignIn();
-                    } else if (mLastError != null) {
+                    }else if (mLastError instanceof UserRecoverableAuthException){
+                        getAuthToken();
+                    }else if (mLastError != null) {
                         Log.d("==er ", "The following error occurred:\n" + mLastError.getMessage());
                     } else {
                         Log.d("==err", "Request cancelled.");
@@ -526,72 +553,58 @@ public class MainActivity extends BaseActivity {
         });
     }
 
+    private void getAuthToken() {
+        new Thread(() -> {
+            try {
+                final String scope = "oauth2:" + CalendarScopes.CALENDAR;
+                final String accountName = GoogleSignIn.getLastSignedInAccount(this).getEmail();
+
+                final String token = GoogleAuthUtil.getToken(getApplicationContext(), accountName, scope);
+
+            } catch (UserRecoverableAuthException e) {
+                startActivityForResult(e.getIntent(), REQUEST_AUTHORIZATION);
+            } catch (GoogleAuthException | IOException e) {
+                Log.e("AuthError", "Failed to obtain OAuth token", e);
+            }
+        }).start();
+    }
+
     private void saveMeetingDataToFirebase(List<Meetings> meetingsList) {
         DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
         for (int i = 0; i < meetingsList.size(); i++) {
-            isMeetingIdExist = false;
-
             String id = meetingsList.get(i).getId();
-            int finalI = i;
-            reference.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot snapshot) {
-                    isMeetingIdExist = false;
-                    if (snapshot.exists()){
-                        for (DataSnapshot dataSnapshot : snapshot.getChildren()){
-                            Meetings meetings = dataSnapshot.getValue(Meetings.class);
-                            assert meetings != null;
-                            if (meetings.getId().equals(id)){
-                                isMeetingIdExist = true;
-                            }
-                        }
-                    }
-
-                    if (!isMeetingIdExist) {
-                        String summary = meetingsList.get(finalI).getSummary();
-                        String startTime = meetingsList.get(finalI).getStartTime();
-                        String endTime = meetingsList.get(finalI).getEndTime();
-                        String description = meetingsList.get(finalI).getDescription();
-                        String organizer = meetingsList.get(finalI).getOrganizer().getEmail();
-                        String gptUrl = meetingsList.get(finalI).getGptUrl();
-                        String driveUrl = meetingsList.get(finalI).getDriveUrl();
-                        String videoUrl = meetingsList.get(finalI).getVideoUrl();
-                        //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
-                        boolean self = meetingsList.get(finalI).getOrganizer().isSelf();
-                        HashMap<String, Object> eventHashMap = new HashMap<>();
-                        eventHashMap.put("id", id);
-                        eventHashMap.put("summary", summary);
-                        eventHashMap.put("startTime", startTime);
-                        eventHashMap.put("endTime", endTime);
-                        eventHashMap.put("description", description);
-                        eventHashMap.put("gptUrl", gptUrl);
-                        eventHashMap.put("driveUrl",driveUrl);
-                        eventHashMap.put("videoUrl", videoUrl);
-                        HashMap<String, Object> organizerHashMap = new HashMap<>();
-                        organizerHashMap.put("email", organizer);
-                        //organizerHashMap.put("displayName", displayName);
-                        organizerHashMap.put("self", self);
-                        reference.child(id).updateChildren(eventHashMap);
-                        reference.child(id).child("Organizer")
-                                .child(1 + "").updateChildren(organizerHashMap);
-                        int attendeeId = 1;
-                        for (Meetings.Attendee attendee : meetingsList.get(finalI).getAttendees()) {
-                            HashMap<String, Object> attendeeHashMap = new HashMap<>();
-                            attendeeHashMap.put("email", attendee.getEmail());
-                            attendeeHashMap.put("displayName", attendee.getDisplayName());
-                            attendeeHashMap.put("responseStatus", attendee.getResponseStatus());
-                            reference.child(id).child("Attendees")
-                                    .child(attendeeId + "").updateChildren(attendeeHashMap);
-                            attendeeId = attendeeId + 1;
-                        }
-                    }
-                }
-
-                @Override
-                public void onCancelled(@NonNull DatabaseError error) {
-
-                }
-            });
+            String summary = meetingsList.get(i).getSummary();
+            String startTime = meetingsList.get(i).getStartTime();
+            String endTime = meetingsList.get(i).getEndTime();
+            String description = meetingsList.get(i).getDescription();
+            String organizer = meetingsList.get(i).getOrganizer().getEmail();
+            String videoUrl = meetingsList.get(i).getVideoUrl();
+            //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
+            boolean self = meetingsList.get(i).getOrganizer().isSelf();
+            HashMap<String, Object> eventHashMap = new HashMap<>();
+            eventHashMap.put("id", id);
+            eventHashMap.put("summary", summary);
+            eventHashMap.put("startTime", startTime);
+            eventHashMap.put("endTime", endTime);
+            eventHashMap.put("description", description);
+            eventHashMap.put("videoUrl", videoUrl);
+            HashMap<String, Object> organizerHashMap = new HashMap<>();
+            organizerHashMap.put("email", organizer);
+            //organizerHashMap.put("displayName", displayName);
+            organizerHashMap.put("self", self);
+            reference.child(id).updateChildren(eventHashMap);
+            reference.child(id).child("Organizer")
+                    .child(1 + "").updateChildren(organizerHashMap);
+            int attendeeId = 1;
+            for (Meetings.Attendee attendee : meetingsList.get(i).getAttendees()) {
+                HashMap<String, Object> attendeeHashMap = new HashMap<>();
+                attendeeHashMap.put("email", attendee.getEmail());
+                attendeeHashMap.put("displayName", attendee.getDisplayName());
+                attendeeHashMap.put("responseStatus", attendee.getResponseStatus());
+                reference.child(id).child("Attendees")
+                        .child(attendeeId + "").updateChildren(attendeeHashMap);
+                attendeeId = attendeeId + 1;
+            }
         }
         for (int i = 0; i < meetingsList.size(); i++) {
             isIdExists = false;
@@ -604,6 +617,7 @@ public class MainActivity extends BaseActivity {
                     if (snapshot.exists()) {
                         for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
                             Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                            assert meetings != null;
                             reference.child(meetings.getId()).child("Organizer")
                                     .addListenerForSingleValueEvent(new ValueEventListener() {
                                         @Override
@@ -613,48 +627,53 @@ public class MainActivity extends BaseActivity {
                                                     isIdExists = false;
                                                     isSameOrganizer = false;
                                                     Meetings.Organizer organizer = dataSnapshot1.getValue(Meetings.Organizer.class);
+                                                    assert organizer != null;
                                                     if (organizer.getEmail().equals(organizerEmail)) {
-                                                        isSameOrganizer = true;
-                                                        Date currentDate = new Date();
 
-                                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-                                                        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
-                                                        Date providedStartDate = null, providedEndDate = null;
-                                                        try {
-                                                            providedStartDate = dateFormat.parse(meetings.getStartTime());
-                                                            providedEndDate = dateFormat.parse(meetings.getEndTime());
-                                                        } catch (ParseException e) {
-                                                            Log.d("exception", Objects.requireNonNull(e.getMessage()));
-                                                        }
-                                                        if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
-                                                            if (mId.equals(meetings.getId())) {
-                                                                isIdExists = true;
-                                                            }
-                                                            long fiveMinutesBefore = currentDate.getTime() + (providedStartDate.getTime() - providedEndDate.getTime());
-                                                            if (!(currentDate.getTime() <= fiveMinutesBefore)) {
-                                                                Log.d("==test", "" + currentDate.getTime() + " " + fiveMinutesBefore);
-                                                                if (isSameOrganizer) {
-                                                                    isIdExists = true;
-                                                                }
-                                                            }
-                                                        } else if (currentDate.compareTo(providedStartDate) > 0) {
-                                                            if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
-                                                                if (mId.equals(meetings.getId())) {
-                                                                    isIdExists = true;
-                                                                }
-                                                            }
-                                                        }
-                                                        if (currentDate.compareTo(providedEndDate) > 0) {
-                                                            if (isSameOrganizer) {
-                                                                isIdExists = true;
-                                                            }
-                                                        }
+                                                        Log.d("==cal id", meetings.getId() + " ");
+                                                        checkIfEventExistsInGoogleCalendar(meetings.getId());
+
+//                                                        isSameOrganizer = true;
+//                                                        Date currentDate = new Date();
+//
+//                                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
+//                                                        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
+//                                                        Date providedStartDate = null, providedEndDate = null;
+//                                                        try {
+//                                                            providedStartDate = dateFormat.parse(meetings.getStartTime());
+//                                                            providedEndDate = dateFormat.parse(meetings.getEndTime());
+//                                                        } catch (ParseException e) {
+//                                                            Log.d("exception", Objects.requireNonNull(e.getMessage()));
+//                                                        }
+//                                                        if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
+//                                                            if (mId.equals(meetings.getId())) {
+//                                                                isIdExists = true;
+//                                                            }
+//                                                            long fiveMinutesBefore = currentDate.getTime() + (providedStartDate.getTime() - providedEndDate.getTime());
+//                                                            if (!(currentDate.getTime() <= fiveMinutesBefore)) {
+//                                                                Log.d("==test", "" + currentDate.getTime() + " " + fiveMinutesBefore);
+//                                                                if (isSameOrganizer) {
+//                                                                    isIdExists = true;
+//                                                                }
+//                                                            }
+//                                                        } else if (currentDate.compareTo(providedStartDate) > 0) {
+//                                                            if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
+//                                                                if (mId.equals(meetings.getId())) {
+//                                                                    isIdExists = true;
+//                                                                }
+//                                                            }
+//                                                        }
+//                                                        if (currentDate.compareTo(providedEndDate) > 0) {
+//                                                            if (isSameOrganizer) {
+//                                                                isIdExists = true;
+//                                                            }
+//                                                        }
                                                     }
                                                 }
-                                                if (isSameOrganizer && !isIdExists) {
-                                                    Log.d("==meeidc", meetings.getId() + " : " + mId);
-                                                    reference.child(meetings.getId()).removeValue();
-                                                }
+//                                                if (isSameOrganizer && !isIdExists) {
+//                                                    Log.d("==meeidc", meetings.getId() + " : " + mId);
+//                                                    reference.child(meetings.getId()).removeValue();
+//                                                }
                                             }
                                         }
 
@@ -674,6 +693,27 @@ public class MainActivity extends BaseActivity {
             });
             return;
         }
+    }
+
+    private void checkIfEventExistsInGoogleCalendar(String googleEventId) {
+        new Thread(() -> {
+            try {
+                Event event = mService.events().get("primary", googleEventId).execute();
+                if (event.getStatus().equals("cancelled")) {
+                    FirebaseDatabase.getInstance().getReference().child("Meetings")
+                            .child(googleEventId).removeValue();
+                }
+                Log.d("==cal status", "exists " + event.getStatus() + " " + googleEventId);
+            } catch (GoogleJsonResponseException e) {
+                Log.d("==cal exception", "exception " + e + " " + e.getStatusCode());
+                if (e.getStatusCode() == 404) {
+                    FirebaseDatabase.getInstance().getReference().child("Meetings")
+                            .child(googleEventId).removeValue();
+                }
+            } catch (Exception e) {
+                Log.d("==cal", e.getMessage() + " ");
+            }
+        }).start();
     }
 
     public List<Meetings> getDataFromCalendar() {

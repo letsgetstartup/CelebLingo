@@ -1,5 +1,8 @@
 package com.celeblingo;
 
+import static com.celeblingo.MainActivity.extractVideoId;
+import static com.celeblingo.MainActivity.extractYTId;
+
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.Dialog;
@@ -12,9 +15,11 @@ import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
@@ -28,6 +33,7 @@ import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -42,20 +48,37 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.widget.AppCompatButton;
 
 import com.celeblingo.helper.BaseActivity;
+import com.celeblingo.helper.Constants;
 import com.celeblingo.helper.DriveManager;
 import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
+import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.client.util.DateTime;
+import com.google.api.services.calendar.Calendar;
+import com.google.api.services.calendar.CalendarScopes;
+import com.google.api.services.calendar.model.Event;
 import com.google.api.services.drive.DriveScopes;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.StorageReference;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener;
+import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.Collections;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
@@ -76,6 +99,12 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
     private Handler handler;
     private Runnable runnable;
     private boolean isFullscreen = true;
+    private Handler autoSSHandler = new Handler();
+    private Runnable autoSSRunable = this::captureAutoScreenshot;
+    private Meetings currentMeeting;
+    private String videoUrl, htmlUrl;
+    private String youtubeVideoId = null;
+    private Calendar mCalendarService;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -102,6 +131,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
             if (type.equals("meeting")) {
                 getMeetingName();
                 updateMeetingLinkInDB();
+                autoSSHandler.postDelayed(autoSSRunable, 10 * 60 * 1000);
             }
         }
 
@@ -124,12 +154,27 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         reference.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
             public void onDataChange(@NonNull DataSnapshot snapshot) {
-                if (snapshot.exists()){
-                    for (DataSnapshot dataSnapshot : snapshot.getChildren()){
+                if (snapshot.exists()) {
+                    for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
                         Meetings meetings = dataSnapshot.getValue(Meetings.class);
                         assert meetings != null;
-                        if (meetings.getId().equals(meetingId)){
+                        if (meetings.getId().equals(meetingId)) {
+                            videoUrl = meetings.getVideoUrl();
+                            htmlUrl = dataSnapshot.child("htmlUrl").getValue(String.class);
+                            currentMeeting = meetings;
                             meetingName = meetings.getSummary();
+                            DateTime eventEndTime = new DateTime(meetings.getEndTime());
+                            long fiveMinutesBeforeEnd = eventEndTime.getValue() - 5 * 60 * 1000;
+                            Handler handler = new Handler(Looper.getMainLooper());
+                            Runnable showDialogRunnable = new Runnable() {
+                                @Override
+                                public void run() {
+                                    showEventEndDialog(meetings);
+                                }
+                            };
+                            long delay = fiveMinutesBeforeEnd - System.currentTimeMillis();
+                            Log.d("==dela", delay + " : " + fiveMinutesBeforeEnd + " : " + eventEndTime);
+                            handler.postDelayed(showDialogRunnable, delay);
                         }
                     }
                 }
@@ -142,30 +187,97 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         });
     }
 
-    private void fullScreeObserver() {
-        // Monitor the layout for changes (e.g., keyboard showing/hiding)
-        final View contentView = findViewById(android.R.id.content);
-        contentView.getViewTreeObserver().addOnGlobalLayoutListener(new ViewTreeObserver.OnGlobalLayoutListener() {
-            @Override
-            public void onGlobalLayout() {
-                Rect r = new Rect();
-                contentView.getWindowVisibleDisplayFrame(r);
-                int screenHeight = contentView.getRootView().getHeight();
+    private void createAndSaveHtml(DatabaseReference reference, Meetings meetings) {
+        webView.evaluateJavascript(
+                "(function() { return document.body.innerText; })();",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        String modifiedValue = value.replace("\\n", "<br>");
 
-                // Determine if the keyboard is shown
-                int keypadHeight = screenHeight - r.bottom;
-                if (keypadHeight > 150) { // If more than 150 pixels, it's probably a keyboard.
-                    if (isFullscreen) {
-                        toggleFullscreen(false);
-                        isFullscreen = false;
+                        modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
+
+
+                        Log.d("==WebViewText", modifiedValue);
+
+                        String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
+                                "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
+                                "<body>" + modifiedValue + "</body></html>";
+
+                        File htmlFile = createHtmlFile(htmlContent, meetings.getSummary());
+
+                        if (htmlFile != null) {
+                            uploadFileToFirebaseStorage(htmlFile, task -> {
+                                if (task.isSuccessful()) {
+                                    Uri downloadUri = task.getResult();
+                                    reference.child(meetings.getId())
+                                            .child("htmlUrl").setValue(downloadUri.toString());
+                                    new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+
+                                    Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
+                                    deleteFile(htmlFile);
+                                } else {
+                                    // Handle failure
+                                    Log.e("==file", "Upload failed", task.getException());
+                                }
+                            });
+                        }
+
                     }
-                } else {
-                    if (!isFullscreen) {
-                        contentView.postDelayed(() -> {
-                            toggleFullscreen(true);
-                            isFullscreen = true;
-                        }, 200); // Delay to ensure smooth transition
-                    }
+                }
+        );
+    }
+
+    private void updateCalenderEvent(Meetings meetings, String htmlUrl) {
+        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(this);
+        if (account != null) {
+            GoogleAccountCredential credential =
+                    GoogleAccountCredential.usingOAuth2(
+                            this, Arrays.asList(CalendarScopes.CALENDAR, CalendarScopes.CALENDAR_READONLY));
+            credential.setSelectedAccount(account.getAccount());
+            mCalendarService = new Calendar.Builder(
+                    new NetHttpTransport(),
+                    GsonFactory.getDefaultInstance(),
+                    credential)
+                    .setApplicationName("CelebLingo").build();
+            Event event = null;
+            try {
+                event = mCalendarService.events().get("primary", meetings.getId()).execute();
+
+                String description = "gptUrl: " + meetings.getGptUrl() + "\n" +
+                        "driveUrl: " + meetings.getDriveUrl() + "\n" +
+                        "videoUrl: " + videoUrl + "\n" +
+                        "htmlUrl: " + htmlUrl;
+
+                event.setDescription(description);
+                Event updatedEvent = mCalendarService.events().update("primary", event.getId(), event).execute();
+                System.out.println("==upd" + updatedEvent.getUpdated() + " " + updatedEvent.getDescription());
+
+            } catch (IOException e) {
+                Log.d("==upd err", e.getMessage() + "");
+            }
+        }
+    }
+
+    private void fullScreeObserver() {
+        final View contentView = findViewById(android.R.id.content);
+        contentView.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            Rect r = new Rect();
+            contentView.getWindowVisibleDisplayFrame(r);
+            int screenHeight = contentView.getRootView().getHeight();
+
+            int keypadHeight = screenHeight - r.bottom;
+            if (keypadHeight > 150) {
+                if (isFullscreen) {
+                    toggleFullscreen(false);
+                    isFullscreen = false;
+                }
+            } else {
+                if (!isFullscreen) {
+                    contentView.postDelayed(() -> {
+                        toggleFullscreen(true);
+                        isFullscreen = true;
+                    }, 200);
                 }
             }
         });
@@ -210,11 +322,66 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         handler.postDelayed(runnable, 5 * 60 * 1000);
     }
 
+    private void showEventEndDialog(Meetings meetings) {
+        Dialog dialog = new Dialog(this);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        dialog.setContentView(R.layout.dialog_meeting_end);
+        dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.setCancelable(false);
+
+        YouTubePlayerView youTubePlayerView = dialog.findViewById(R.id.youtube_view);
+        AppCompatButton closeBtn = dialog.findViewById(R.id.close_meeting_btn);
+        AppCompatButton closeChatBtn = dialog.findViewById(R.id.close_chat_btn);
+
+        getLifecycle().addObserver(youTubePlayerView);
+
+        youtubeVideoId = extractVideoId(Constants.DEFAULT_END_VIDEO_URL);
+        if (youtubeVideoId.equals("NoId")) {
+            youtubeVideoId = extractYTId(Constants.DEFAULT_END_VIDEO_URL);
+        }
+        Log.d("==videoid", youtubeVideoId + "");
+        youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
+            @Override
+            public void onReady(@NonNull com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer youTubePlayer) {
+                youTubePlayer.loadVideo(youtubeVideoId, 0);
+            }
+
+            @Override
+            public void onStateChange(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerState state) {
+                super.onStateChange(youTubePlayer, state);
+            }
+
+            @Override
+            public void onError(@NonNull YouTubePlayer youTubePlayer, @NonNull PlayerConstants.PlayerError error) {
+                super.onError(youTubePlayer, error);
+                Log.d("==youtube", error + "");
+                youTubePlayer.loadVideo(youtubeVideoId, 0);
+            }
+        });
+
+        closeBtn.setOnClickListener(view -> {
+            youTubePlayerView.release();
+            dialog.dismiss();
+        });
+
+        closeChatBtn.setOnClickListener(view -> {
+            youTubePlayerView.release();
+            startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+        });
+
+        dialog.show();
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (handler != null && runnable != null) {
             handler.removeCallbacks(runnable);
+        }
+        if (autoSSHandler != null && autoSSRunable != null) {
+            autoSSHandler.removeCallbacks(autoSSRunable);
         }
     }
 
@@ -231,6 +398,18 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         Canvas canvas = new Canvas(bitmap);
         webView.draw(canvas);
         showSaveImageDialog(bitmap);
+    }
+
+    private void captureAutoScreenshot() {
+        Bitmap bitmap = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        webView.draw(canvas);
+        createNewFolder(bitmap);
+        DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
+        if (currentMeeting != null) {
+            createAndSaveHtml(reference, currentMeeting);
+        }
+        autoSSHandler.postDelayed(autoSSRunable, 10 * 60 * 1000);
     }
 
     private void showSaveImageDialog(Bitmap bitmap) {
@@ -263,7 +442,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         if (account != null) {
             GoogleAccountCredential credential =
                     GoogleAccountCredential.usingOAuth2(
-                            this, Collections.singleton(DriveScopes.DRIVE_FILE));
+                            this, Arrays.asList(DriveScopes.DRIVE_FILE, CalendarScopes.CALENDAR, CalendarScopes.CALENDAR_READONLY));
             credential.setSelectedAccount(account.getAccount());
             @SuppressLint("SimpleDateFormat") SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd");
             String folderName;
@@ -271,36 +450,38 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                 if (type.equals("meeting")) {
                     if (meetingName != null) {
                         folderName = meetingName;
-                    }else {
+                    } else {
                         folderName = dateFormatter.format(new Date());
                     }
-                }else {
+                } else {
                     folderName = dateFormatter.format(new Date());
                 }
             } else {
                 folderName = dateFormatter.format(new Date());
             }
-            DriveManager driveManager = new DriveManager(credential, folderName, bitmap, null, meetingId, new DriveManager.DriveTaskListener() {
-                @Override
-                public void onDriveTaskCompleted(String id) {
-                    WebViewActivity.this.runOnUiThread(new Runnable() {
+            DriveManager driveManager = new DriveManager(credential, folderName, bitmap,
+                    null, meetingId, webView.getUrl(), videoUrl, htmlUrl,
+                    new DriveManager.DriveTaskListener() {
                         @Override
-                        public void run() {
-                            Toast.makeText(WebViewActivity.this, "Image saved successfully...", Toast.LENGTH_SHORT).show();
+                        public void onDriveTaskCompleted(String id) {
+                            WebViewActivity.this.runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(WebViewActivity.this, "Image saved successfully...", Toast.LENGTH_SHORT).show();
+                                }
+                            });
                         }
-                    });
-                }
 
-                @Override
-                public void onDriveTaskFailed() {
-                    WebViewActivity.this.runOnUiThread(new Runnable() {
                         @Override
-                        public void run() {
-                            Toast.makeText(WebViewActivity.this, "Failed to create folder", Toast.LENGTH_SHORT).show();
+                        public void onDriveTaskFailed() {
+                            WebViewActivity.this.runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(WebViewActivity.this, "Failed to create folder", Toast.LENGTH_SHORT).show();
+                                }
+                            });
                         }
                     });
-                }
-            });
             driveManager.execute();
         }
     }
@@ -551,6 +732,46 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         relativeLayout = findViewById(R.id.relative_layout);
         opeSettingBtn = findViewById(R.id.open_setting_btn);
         reloadBtn = findViewById(R.id.reload_btn);
+    }
+
+    private File createHtmlFile(String htmlContent, String name) {
+        File htmlFile = null;
+        try {
+            htmlFile = File.createTempFile(name, ".html", getCacheDir());
+            FileWriter writer = new FileWriter(htmlFile);
+            writer.write(htmlContent);
+            writer.close();
+            Log.d("==file", "created" + "");
+        } catch (IOException e) {
+            Log.d("==file", e.getMessage() + "");
+
+        }
+        return htmlFile;
+    }
+
+    private void uploadFileToFirebaseStorage(File file, OnCompleteListener<Uri> onCompleteListener) {
+        Uri fileUri = Uri.fromFile(file);
+        StorageReference storageRef = FirebaseStorage.getInstance().getReference("htmlFiles/" + file.getName());
+        storageRef.putFile(fileUri)
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful()) {
+                        Log.d("==file", task.getException() + " ");
+                        throw task.getException();
+                    }
+                    return storageRef.getDownloadUrl();
+                })
+                .addOnCompleteListener(onCompleteListener);
+    }
+
+    private void deleteFile(File file) {
+        if (file != null && file.exists()) {
+            boolean deleted = file.delete();
+            if (deleted) {
+                Log.d("==file", "File deleted successfully");
+            } else {
+                Log.d("==file", "Failed to delete file");
+            }
+        }
     }
 
     private void setClickListeners() {

@@ -1,5 +1,6 @@
 package com.celeblingo.helper;
 
+import android.app.Activity;
 import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.util.Log;
@@ -8,8 +9,11 @@ import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccoun
 import com.google.api.client.http.ByteArrayContent;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.calendar.Calendar;
+import com.google.api.services.calendar.model.Event;
 import com.google.api.services.drive.Drive;
 import com.google.api.services.drive.model.File;
+import com.google.api.services.drive.model.Permission;
 import com.google.firebase.database.FirebaseDatabase;
 
 import java.io.ByteArrayOutputStream;
@@ -25,19 +29,30 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
     private final String mParentFolderId;
     private final String meetingId;
     private final DriveTaskListener mListener;
+    private final Calendar mCalendarService;
+    private final String webViewUrl, videoUrl, htmlUrl;
 
     public DriveManager(GoogleAccountCredential credential, String folderName,
                         Bitmap bitmap, String parentFolderId,
-                        String meetingId, DriveTaskListener listener) {
+                        String meetingId, String url, String videoUrl, String htmlUrl,
+                        DriveTaskListener listener) {
         mDriveService = new Drive.Builder(
                 new NetHttpTransport(),
                 new GsonFactory(),
                 credential)
                 .setApplicationName("Celeblingo")
                 .build();
+        mCalendarService = new Calendar.Builder(
+                new NetHttpTransport(),
+                GsonFactory.getDefaultInstance(),
+                credential)
+                .setApplicationName("CelebLingo").build();
         mFolderName = folderName;
         mParentFolderId = parentFolderId;
         this.meetingId = meetingId;
+        this.webViewUrl = url;
+        this.videoUrl = videoUrl;
+        this.htmlUrl = htmlUrl;
         mListener = listener;
         this.bitmap = bitmap;
     }
@@ -57,13 +72,35 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                     File folder = mDriveService.files().create(fileMetadata)
                             .setFields("id, webViewLink")
                             .execute();
-                    if (meetingId != null){
+                    if (meetingId != null) {
                         String folderLink = folder.getWebViewLink();
                         Log.d("==driveFolder", folderLink);
                         FirebaseDatabase.getInstance().getReference().child("Meetings")
                                 .child(meetingId).child("driveUrl")
                                 .setValue(folderLink);
+                        Event event = null;
+                        try {
+                            event = mCalendarService.events().get("primary", meetingId).execute();
+
+                            String description = "gptUrl: " + webViewUrl+"\n"+
+                                    "driveUrl: " + folderLink +"\n"+
+                                    "videoUrl: " + videoUrl+ "\n" +
+                                    "htmlUrl: " +htmlUrl;
+
+                            event.setDescription(description);
+                            Event updatedEvent = mCalendarService.events().update("primary", event.getId(), event).execute();
+                            System.out.println("==upd" + updatedEvent.getUpdated() + " " + updatedEvent.getDescription());
+
+                        } catch (IOException e) {
+                            Log.d("==upd err", e.getMessage() + "");
+                        }
                     }
+                    Permission permission = new Permission()
+                            .setType("anyone")
+                            .setRole("reader");
+
+                    mDriveService.permissions().create(folder.getId(), permission)
+                            .execute();
                     uploadDrawableToDrive(folder.getId(), mDriveService, bitmap);
                 } catch (IOException e) {
                     e.printStackTrace();
@@ -74,12 +111,28 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
                 return null;
             } else {
                 Log.d("==drive", "folder exists " + getExistingFolderId(mFolderName));
-                if (meetingId != null){
+                if (meetingId != null) {
                     String folderLink = getExistingFolderUrl(mFolderName);
                     Log.d("==driveFoldere", folderLink);
                     FirebaseDatabase.getInstance().getReference().child("Meetings")
                             .child(meetingId).child("driveUrl")
                             .setValue(folderLink);
+                    Event event = null;
+                    try {
+                        event = mCalendarService.events().get("primary", meetingId).execute();
+
+                        String description = "gptUrl: " + webViewUrl+"\n"+
+                                "driveUrl: " + folderLink +"\n"+
+                                "videoUrl: " + videoUrl+ "\n" +
+                                "htmlUrl: " + htmlUrl;
+
+                        event.setDescription(description);
+                        Event updatedEvent = mCalendarService.events().update("primary", event.getId(), event).execute();
+                        System.out.println("==upd" + updatedEvent.getUpdated() + " " + updatedEvent.getDescription());
+
+                    } catch (IOException e) {
+                        Log.d("==upd err", e.getMessage() + "");
+                    }
                 }
                 uploadDrawableToDrive(getExistingFolderId(mFolderName), mDriveService, bitmap);
             }
@@ -107,6 +160,15 @@ public class DriveManager extends AsyncTask<Void, Void, Void> {
 
             ByteArrayContent mediaContent = new ByteArrayContent("image/png", byteArray);
             File uploadedFile = driveService.files().create(fileMetadata, mediaContent).execute();
+
+            Permission permission = new Permission()
+                    .setType("anyone")
+                    .setRole("reader");
+
+            mDriveService.permissions().create(uploadedFile.getId(), permission)
+                    .execute();
+            mDriveService.permissions().create(FOLDER_ID, permission)
+                    .execute();
 
             if (mListener != null) {
                 mListener.onDriveTaskCompleted(uploadedFile.getId());
