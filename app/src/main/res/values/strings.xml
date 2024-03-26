@@ -16,6 +16,7 @@
     <string name="attendees">Attendees</string>
     <string name="join">Join</string>
     <string name="no_data">No Upcoming Classes</string>
+    <string name="no_history_data">No Classes History</string>
     <string name="title_home">Home</string>
     <string name="meeting">Class</string>
     <string name="sign_in">Sign In</string>
@@ -30,4 +31,15 @@
     <string name="start">Start</string>
     <string name="no_ongoing_class">No Ongoing Class</string>
     <string name="close_chat">Close Chat</string>
+    <string name="please_wait">Please Wait…</string>
+    <string name="create_new_class">Create New Class</string>
+    <string name="enter_your_name">Enter Your Names</string>
+    <string name="create">Create</string>
+    <string name="config">Config</string>
+    <string name="login">Login</string>
+    <string name="logout">Logout</string>
+    <string name="continue_with_google">Continue with Google</string>
+    <string name="continue_with_email">Continue With Email</string>
+    <string name="enter_your_email">Enter Your Email...</string>
+    <string name="or">Or</string>
 </resources>

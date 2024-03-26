@@ -10,7 +10,7 @@ public class Meetings {
     private String description;
     private String startTime;
     private String endTime;
-    private String gptUrl, driveUrl, videoUrl;
+    private String gptUrl, driveUrl, videoUrl, htmlUrl;
     private List<Attendee> attendees;
     private Organizer organizer;
 
@@ -18,7 +18,8 @@ public class Meetings {
     }
 
     public Meetings(String id, String summary, String description, String startTime, String endTime,
-                    String gptUrl, String driveUrl, String videoUrl, List<Attendee> attendees, Organizer organizer) {
+                    String gptUrl, String driveUrl, String videoUrl, String htmlUrl,
+                    List<Attendee> attendees, Organizer organizer) {
         this.id = id;
         this.summary = summary;
         this.description = description;
@@ -27,6 +28,7 @@ public class Meetings {
         this.gptUrl = gptUrl;
         this.driveUrl = driveUrl;
         this.videoUrl = videoUrl;
+        this.htmlUrl = htmlUrl;
         this.attendees = attendees;
         this.organizer = organizer;
     }
@@ -93,6 +95,14 @@ public class Meetings {
 
     public void setVideoUrl(String videoUrl) {
         this.videoUrl = videoUrl;
+    }
+
+    public String getHtmlUrl() {
+        return htmlUrl;
+    }
+
+    public void setHtmlUrl(String htmlUrl) {
+        this.htmlUrl = htmlUrl;
     }
 
     public List<Attendee> getAttendees() {

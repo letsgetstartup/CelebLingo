@@ -2,6 +2,8 @@ package com.celeblingo;
 
 import static com.celeblingo.MainActivity.extractVideoId;
 import static com.celeblingo.MainActivity.extractYTId;
+import static com.celeblingo.helper.Utils.hideProgressDialog;
+import static com.celeblingo.helper.Utils.showProgressDialog;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
@@ -18,6 +20,7 @@ import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.CountDownTimer;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -29,7 +32,6 @@ import android.view.Gravity;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewTreeObserver;
 import android.view.Window;
 import android.webkit.HttpAuthHandler;
 import android.webkit.JavascriptInterface;
@@ -39,21 +41,27 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.widget.AppCompatButton;
+import androidx.core.content.ContextCompat;
 
 import com.celeblingo.helper.BaseActivity;
 import com.celeblingo.helper.Constants;
 import com.celeblingo.helper.DriveManager;
+import com.celeblingo.helper.HtmlHelper;
 import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.api.signin.GoogleSignIn;
 import com.google.android.gms.auth.api.signin.GoogleSignInAccount;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential;
 import com.google.api.client.http.javanet.NetHttpTransport;
 import com.google.api.client.json.gson.GsonFactory;
@@ -74,14 +82,23 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener;
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItemClickListener {
     private String url, type, meetingId, meetingName;
@@ -104,7 +121,8 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
     private Meetings currentMeeting;
     private String videoUrl, htmlUrl;
     private String youtubeVideoId = null;
-    private Calendar mCalendarService;
+    private Dialog dialog;
+    private TextView titleTxt;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +135,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         initViews();
 
         ttsManager = new TTSManager(this);
+        dialog = new Dialog(this);
 
         paragraphCount = 1;
 
@@ -160,21 +179,22 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                         assert meetings != null;
                         if (meetings.getId().equals(meetingId)) {
                             videoUrl = meetings.getVideoUrl();
-                            htmlUrl = dataSnapshot.child("htmlUrl").getValue(String.class);
+                            htmlUrl = meetings.getHtmlUrl();
                             currentMeeting = meetings;
+                            titleTxt.setText(meetings.getSummary());
                             meetingName = meetings.getSummary();
                             DateTime eventEndTime = new DateTime(meetings.getEndTime());
                             long fiveMinutesBeforeEnd = eventEndTime.getValue() - 5 * 60 * 1000;
                             Handler handler = new Handler(Looper.getMainLooper());
-                            Runnable showDialogRunnable = new Runnable() {
-                                @Override
-                                public void run() {
-                                    showEventEndDialog(meetings);
-                                }
-                            };
+                            Runnable showDialogRunnable = () -> showEventEndDialog(meetings);
                             long delay = fiveMinutesBeforeEnd - System.currentTimeMillis();
-                            Log.d("==dela", delay + " : " + fiveMinutesBeforeEnd + " : " + eventEndTime);
                             handler.postDelayed(showDialogRunnable, delay);
+                            //
+                            long oneMinuteBeforeEnd = eventEndTime.getValue() - 60000;
+                            long delayToShowDialog = oneMinuteBeforeEnd - System.currentTimeMillis();
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                showAlertDialogWithTimer();
+                            }, delayToShowDialog);
                         }
                     }
                 }
@@ -187,45 +207,380 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         });
     }
 
-    private void createAndSaveHtml(DatabaseReference reference, Meetings meetings) {
+    private void showAlertDialogWithTimer() {
+        final AlertDialog[] dialog = new AlertDialog[1];
+        CountDownTimer countDownTimer = new CountDownTimer(60000, 1000) {
+            public void onTick(long millisUntilFinished) {
+                if (dialog[0] != null) {
+                    dialog[0].setMessage("Class ended. Chat will be close in " + millisUntilFinished / 1000 + " seconds");
+                }
+            }
+
+            public void onFinish() {
+                startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+            }
+        }.start();
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Class Ended");
+        builder.setMessage("Class ended...");
+        builder.setCancelable(false);
+        builder.setNegativeButton("Cancel", (dialogInterface, i) -> {
+            countDownTimer.cancel();
+            dialog[0].dismiss();
+        });
+        dialog[0] = builder.create();
+        dialog[0].show();
+        Button negativeButton = dialog[0].getButton(AlertDialog.BUTTON_NEGATIVE);
+        if (negativeButton != null) {
+            negativeButton.setTextColor(ContextCompat.getColor(this, R.color.black));
+        }
+    }
+
+
+    int i = 0;
+
+    private void createAndSaveHtml(DatabaseReference reference, Meetings meetings, String type) {
+        StringBuilder imagesBuilder = new StringBuilder();
         webView.evaluateJavascript(
-                "(function() { return document.body.innerText; })();",
-                new ValueCallback<String>() {
-                    @Override
-                    public void onReceiveValue(String value) {
-                        String modifiedValue = value.replace("\\n", "<br>");
+                "(function() {" +
+                        "    var images = document.getElementsByTagName('img');" +
+                        "    var srcList = [];" +
+                        "    for (var i = 0; i < images.length; i++) {" +
+                        "        srcList.push(images[i].src);" +
+                        "    }" +
+                        "    return srcList.toString();" + // Convert array to string to pass back to Java
+                        "})()",
+                value -> {
+                    String[] urls = value.replaceAll("^\"|\"$", "").split(",");
+                    if (urls.length == 0) {
+                        String allImageUrl = imagesBuilder.toString();
+                        Log.d("==images", allImageUrl);
+                        webView.evaluateJavascript(
+                                "(function() { return document.body.innerText; })();",
+                                new ValueCallback<String>() {
+                                    @Override
+                                    public void onReceiveValue(String value) {
+                                        String modifiedValue = value.replace("\\n", "<br>");
 
-                        modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
+                                        modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
 
 
-                        Log.d("==WebViewText", modifiedValue);
+                                        Log.d("==WebViewText", modifiedValue);
 
-                        String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
-                                "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
-                                "<body>" + modifiedValue + "</body></html>";
+                                        String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
+                                                "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
+                                                "<body>" + modifiedValue + allImageUrl + "</body></html>";
 
-                        File htmlFile = createHtmlFile(htmlContent, meetings.getSummary());
+                                        String html = HtmlHelper.createChatDataHtml(meetings.getSummary(), modifiedValue, allImageUrl);
 
-                        if (htmlFile != null) {
-                            uploadFileToFirebaseStorage(htmlFile, task -> {
-                                if (task.isSuccessful()) {
-                                    Uri downloadUri = task.getResult();
-                                    reference.child(meetings.getId())
-                                            .child("htmlUrl").setValue(downloadUri.toString());
-                                    new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+                                        Log.d("==new html", html);
 
-                                    Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
-                                    deleteFile(htmlFile);
-                                } else {
-                                    // Handle failure
-                                    Log.e("==file", "Upload failed", task.getException());
+                                        File htmlFile = createHtmlFile(html, meetings.getSummary());
+
+                                        if (htmlFile != null) {
+                                            uploadFileToFirebaseStorage(htmlFile, task -> {
+                                                if (task.isSuccessful()) {
+                                                    Uri downloadUri = task.getResult();
+                                                    reference.child(meetings.getId())
+                                                            .child("htmlUrl").setValue(downloadUri.toString());
+                                                    new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+
+                                                    Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
+                                                    deleteFile(htmlFile);
+                                                } else {
+                                                    // Handle failure
+                                                    hideProgressDialog();
+                                                    Log.e("==file", "Upload failed", task.getException());
+                                                }
+                                            });
+                                        }
+
+                                        if (type.equals("close")){
+                                            new Handler().postDelayed(new Runnable() {
+                                                @Override
+                                                public void run() {
+                                                    hideProgressDialog();
+                                                    startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                                                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+                                                }
+                                            },1000);
+
+                                        }
+
+                                    }
                                 }
-                            });
-                        }
+                        );
+                    }
+                    Pattern pattern = Pattern.compile("gravatar\\.com.*cdn\\.auth0\\.com");
+                    i = 0;
+                    for (String url : urls) {
+                        Matcher matcher = pattern.matcher(url);
+                        if (!matcher.find()) {
+                            Log.d("==imagggggg", url + " " + urls.length);
+                            //uploadImageToFirebase(url.trim());
+                            if (!url.isEmpty()) {
 
+                                ExecutorService executorService = Executors.newFixedThreadPool(4);
+                                executorService.submit(() -> {
+                                    try {
+                                        // Download the image
+                                        URL url1 = new URL(url.trim());
+                                        HttpURLConnection connection = (HttpURLConnection) url1.openConnection();
+                                        InputStream inputStream = new BufferedInputStream(connection.getInputStream());
+                                        File file = File.createTempFile("image", ".jpg", getCacheDir());
+                                        FileOutputStream fileOutputStream = new FileOutputStream(file);
+
+                                        byte[] buffer = new byte[1024];
+                                        int read;
+                                        while ((read = inputStream.read(buffer)) != -1) {
+                                            fileOutputStream.write(buffer, 0, read);
+                                        }
+                                        fileOutputStream.close();
+                                        inputStream.close();
+
+                                        // Upload the image to Firebase Storage
+                                        Uri fileUri = Uri.fromFile(file);
+
+                                        FirebaseStorage storage = FirebaseStorage.getInstance();
+                                        StorageReference storageRef = storage.getReference().child("images/" + file.getName());
+
+                                        storageRef.putFile(fileUri)
+                                                .addOnSuccessListener(taskSnapshot -> {
+                                                    storageRef.getDownloadUrl().addOnCompleteListener(new OnCompleteListener<Uri>() {
+                                                        @Override
+                                                        public void onComplete(@NonNull Task<Uri> task) {
+                                                            if (task.isSuccessful()) {
+                                                                Uri downloadUri = task.getResult();
+                                                                System.out.println("==upload Download URL:" + i + " " + downloadUri.toString());
+                                                                // Use downloadUri as needed
+                                                                imagesBuilder.append("<div class=\"image-container\"><img src=\"")
+                                                                        .append(downloadUri.toString())
+                                                                        .append("\" alt=\"Image\"><div class=\"caption\"></div></div>");
+                                                                // Cleanup temp file
+                                                                i = i + 1;
+                                                                if (i == (urls.length)) {
+                                                                    String allImageUrl = imagesBuilder.toString();
+                                                                    Log.d("==images", allImageUrl);
+                                                                    webView.evaluateJavascript(
+                                                                            "(function() { return document.body.innerText; })();",
+                                                                            new ValueCallback<String>() {
+                                                                                @Override
+                                                                                public void onReceiveValue(String value) {
+                                                                                    String modifiedValue = value.replace("\\n", "<br>");
+
+                                                                                    modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
+
+
+                                                                                    Log.d("==WebViewText", modifiedValue);
+
+                                                                                    String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
+                                                                                            "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
+                                                                                            "<body>" + modifiedValue + allImageUrl + "</body></html>";
+
+                                                                                    String html = HtmlHelper.createChatDataHtml(meetings.getSummary(), modifiedValue, allImageUrl);
+
+                                                                                    Log.d("==new html", html);
+
+                                                                                    File htmlFile = createHtmlFile(html, meetings.getSummary());
+
+                                                                                    if (htmlFile != null) {
+                                                                                        uploadFileToFirebaseStorage(htmlFile, task -> {
+                                                                                            if (task.isSuccessful()) {
+                                                                                                Uri downloadUri = task.getResult();
+                                                                                                reference.child(meetings.getId())
+                                                                                                        .child("htmlUrl").setValue(downloadUri.toString());
+                                                                                                new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+
+                                                                                                Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
+                                                                                                deleteFile(htmlFile);
+                                                                                            } else {
+                                                                                                // Handle failure
+                                                                                                hideProgressDialog();
+                                                                                                Log.e("==file", "Upload failed", task.getException());
+                                                                                            }
+                                                                                        });
+                                                                                    }
+                                                                                    if (type.equals("close")){
+                                                                                        new Handler().postDelayed(new Runnable() {
+                                                                                            @Override
+                                                                                            public void run() {
+                                                                                                hideProgressDialog();
+                                                                                                startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                                                                                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+                                                                                            }
+                                                                                        },3000);
+
+                                                                                    }
+
+                                                                                }
+                                                                            }
+                                                                    );
+                                                                }
+                                                                new File(fileUri.getPath()).delete();
+                                                            }
+                                                        }
+                                                    });
+                                                })
+                                                .addOnFailureListener(e -> {
+                                                    // Failure handling
+                                                    e.printStackTrace();
+                                                });
+
+                                    } catch (Exception e) {
+                                        e.printStackTrace();
+                                    }
+                                });
+                            } else {
+                                i = i + 1;
+                                if (i == (urls.length)) {
+                                    String allImageUrl = imagesBuilder.toString();
+                                    Log.d("==images", allImageUrl);
+                                    webView.evaluateJavascript(
+                                            "(function() { return document.body.innerText; })();",
+                                            new ValueCallback<String>() {
+                                                @Override
+                                                public void onReceiveValue(String value) {
+                                                    String modifiedValue = value.replace("\\n", "<br>");
+
+                                                    modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
+
+
+                                                    Log.d("==WebViewText", modifiedValue);
+
+                                                    String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
+                                                            "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
+                                                            "<body>" + modifiedValue + allImageUrl + "</body></html>";
+
+                                                    String html = HtmlHelper.createChatDataHtml(meetings.getSummary(), modifiedValue, allImageUrl);
+
+                                                    Log.d("==new html", html);
+
+                                                    File htmlFile = createHtmlFile(html, meetings.getSummary());
+
+                                                    if (htmlFile != null) {
+                                                        uploadFileToFirebaseStorage(htmlFile, task -> {
+                                                            if (task.isSuccessful()) {
+                                                                Uri downloadUri = task.getResult();
+                                                                reference.child(meetings.getId())
+                                                                        .child("htmlUrl").setValue(downloadUri.toString());
+                                                                new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+
+                                                                Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
+                                                                deleteFile(htmlFile);
+                                                            } else {
+                                                                // Handle failure
+                                                                hideProgressDialog();
+                                                                Log.e("==file", "Upload failed", task.getException());
+                                                            }
+                                                        });
+                                                    }
+
+                                                    if (type.equals("close")){
+                                                        new Handler().postDelayed(new Runnable() {
+                                                            @Override
+                                                            public void run() {
+                                                                hideProgressDialog();
+                                                                startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                                                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+                                                            }
+                                                        },3000);
+
+                                                    }
+
+                                                }
+                                            }
+                                    );
+                                }
+                            }
+                        } else {
+                            i = i + 1;
+                            if (i == (urls.length)) {
+                                String allImageUrl = imagesBuilder.toString();
+                                Log.d("==images", allImageUrl);
+                                webView.evaluateJavascript(
+                                        "(function() { return document.body.innerText; })();",
+                                        new ValueCallback<String>() {
+                                            @Override
+                                            public void onReceiveValue(String value) {
+                                                String modifiedValue = value.replace("\\n", "<br>");
+
+                                                modifiedValue = modifiedValue.replaceAll("^\"|\"$", "");
+
+
+                                                Log.d("==WebViewText", modifiedValue);
+
+                                                String htmlContent = "<!DOCTYPE html><html lang=\"he\" dir=\"rtl\">" +
+                                                        "<head><meta charset=\"UTF-8\"><title>" + meetings.getSummary() + "</title><style>body { direction: rtl; text-align: right; }</style></head>" +
+                                                        "<body>" + modifiedValue + allImageUrl + "</body></html>";
+
+                                                String html = HtmlHelper.createChatDataHtml(meetings.getSummary(), modifiedValue, allImageUrl);
+
+                                                Log.d("==new html", html);
+
+                                                File htmlFile = createHtmlFile(html, meetings.getSummary());
+
+                                                if (htmlFile != null) {
+                                                    uploadFileToFirebaseStorage(htmlFile, task -> {
+                                                        if (task.isSuccessful()) {
+                                                            Uri downloadUri = task.getResult();
+                                                            reference.child(meetings.getId())
+                                                                    .child("htmlUrl").setValue(downloadUri.toString());
+                                                            new Thread(() -> updateCalenderEvent(meetings, downloadUri.toString())).start();
+
+                                                            Log.d("==file", "File uploaded with URI: " + downloadUri.toString());
+                                                            deleteFile(htmlFile);
+                                                        } else {
+                                                            // Handle failure
+                                                            hideProgressDialog();
+                                                            Log.e("==file", "Upload failed", task.getException());
+                                                        }
+                                                    });
+                                                }
+
+                                            }
+                                        }
+                                );
+                            }
+                        }
                     }
                 }
         );
+    }
+
+    public void downloadImageAndUploadToFirebase(String imageUrl, String firebasePath) {
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        executorService.submit(() -> {
+            try {
+                // Download the image
+                URL url = new URL(imageUrl);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                InputStream inputStream = new BufferedInputStream(connection.getInputStream());
+                File file = File.createTempFile("image", ".jpg", getCacheDir());
+                FileOutputStream fileOutputStream = new FileOutputStream(file);
+
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = inputStream.read(buffer)) != -1) {
+                    fileOutputStream.write(buffer, 0, read);
+                }
+                fileOutputStream.close();
+                inputStream.close();
+
+                // Upload the image to Firebase Storage
+                Uri fileUri = Uri.fromFile(file);
+                uploadToFirebaseStorage(fileUri, "images/" + file.getName());
+
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+    }
+
+    private void uploadToFirebaseStorage(Uri fileUri, String firebasePath) {
+        Log.d("==upload fb", firebasePath);
+
     }
 
     private void updateCalenderEvent(Meetings meetings, String htmlUrl) {
@@ -235,7 +590,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                     GoogleAccountCredential.usingOAuth2(
                             this, Arrays.asList(CalendarScopes.CALENDAR, CalendarScopes.CALENDAR_READONLY));
             credential.setSelectedAccount(account.getAccount());
-            mCalendarService = new Calendar.Builder(
+            Calendar mCalendarService = new Calendar.Builder(
                     new NetHttpTransport(),
                     GsonFactory.getDefaultInstance(),
                     credential)
@@ -252,10 +607,13 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                 event.setDescription(description);
                 Event updatedEvent = mCalendarService.events().update("primary", event.getId(), event).execute();
                 System.out.println("==upd" + updatedEvent.getUpdated() + " " + updatedEvent.getDescription());
-
+                hideProgressDialog();
             } catch (IOException e) {
+                hideProgressDialog();
                 Log.d("==upd err", e.getMessage() + "");
             }
+        } else {
+            hideProgressDialog();
         }
     }
 
@@ -292,6 +650,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
 //                    FirebaseDatabase.getInstance().getReference().child("Meetings")
 //                            .child(meetingId).child("description")
 //                            .setValue(webView.getUrl());
+                    showProgressDialog(WebViewActivity.this);
                     DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
                     reference.addListenerForSingleValueEvent(new ValueEventListener() {
                         @Override
@@ -308,12 +667,15 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                                                 .setValue(webView.getUrl());
                                     }
                                 }
+                                hideProgressDialog();
+                            } else {
+                                hideProgressDialog();
                             }
                         }
 
                         @Override
                         public void onCancelled(@NonNull DatabaseError error) {
-
+                            hideProgressDialog();
                         }
                     });
                 }
@@ -323,7 +685,6 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
     }
 
     private void showEventEndDialog(Meetings meetings) {
-        Dialog dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.dialog_meeting_end);
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -344,7 +705,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         youTubePlayerView.addYouTubePlayerListener(new AbstractYouTubePlayerListener() {
             @Override
             public void onReady(@NonNull com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer youTubePlayer) {
-                youTubePlayer.loadVideo(youtubeVideoId, 0);
+                youTubePlayer.cueVideo(youtubeVideoId, 0);
             }
 
             @Override
@@ -366,12 +727,15 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         });
 
         closeChatBtn.setOnClickListener(view -> {
+            dialog.dismiss();
             youTubePlayerView.release();
             startActivity(new Intent(WebViewActivity.this, MainActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
         });
 
-        dialog.show();
+        if (dialog != null && !dialog.isShowing()) {
+            dialog.show();
+        }
     }
 
     @Override
@@ -404,10 +768,31 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         Bitmap bitmap = Bitmap.createBitmap(webView.getWidth(), webView.getHeight(), Bitmap.Config.ARGB_8888);
         Canvas canvas = new Canvas(bitmap);
         webView.draw(canvas);
+        showProgressDialog(WebViewActivity.this);
         createNewFolder(bitmap);
         DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
         if (currentMeeting != null) {
-            createAndSaveHtml(reference, currentMeeting);
+            reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                @Override
+                public void onDataChange(@NonNull DataSnapshot snapshot) {
+                    if (snapshot.exists()) {
+                        for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                            Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                            assert meetings != null;
+                            if (meetings.getId().equals(meetingId)) {
+                                htmlUrl = meetings.getHtmlUrl();
+                                currentMeeting = meetings;
+                                createAndSaveHtml(reference, currentMeeting, "screenshot");
+                            }
+                        }
+                    }
+                }
+
+                @Override
+                public void onCancelled(@NonNull DatabaseError error) {
+
+                }
+            });
         }
         autoSSHandler.postDelayed(autoSSRunable, 10 * 60 * 1000);
     }
@@ -418,7 +803,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         dialog.setContentView(R.layout.dialog_capture_screen);
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         dialog.setCanceledOnTouchOutside(false);
-        dialog.setCancelable(false);
+        dialog.setCancelable(true);
 
         ImageView screenShotImg = dialog.findViewById(R.id.capture_img);
         AppCompatButton saveBtn = dialog.findViewById(R.id.save_img_btn);
@@ -427,7 +812,32 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
         screenShotImg.setImageBitmap(bitmap);
         saveBtn.setOnClickListener(view -> {
             dialog.dismiss();
+            showProgressDialog(WebViewActivity.this);
             createNewFolder(bitmap);
+            DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
+            if (currentMeeting != null) {
+                reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (snapshot.exists()) {
+                            for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                                Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                                assert meetings != null;
+                                if (meetings.getId().equals(meetingId)) {
+                                    htmlUrl = meetings.getHtmlUrl();
+                                    currentMeeting = meetings;
+                                    createAndSaveHtml(reference, currentMeeting, "screenshot");
+                                }
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+
+                    }
+                });
+            }
         });
 
         closeBtn.setOnClickListener(view -> {
@@ -483,6 +893,8 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                         }
                     });
             driveManager.execute();
+        } else {
+            hideProgressDialog();
         }
     }
 
@@ -597,7 +1009,10 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
                 super.onPageFinished(view, url);
                 Log.d("url fin", url + " : ");
                 progressBar.setVisibility(View.GONE);
-                injectRtlScript(view);
+                if (!url.startsWith("https://auth0.openai.com/u/login/") &&
+                        !url.startsWith("https://auth0.openai.com/u/signup/")) {
+                    injectRtlScript(view);
+                }
                 injectTextSelectionScript(view);
             }
 
@@ -724,6 +1139,7 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
     }
 
     private void initViews() {
+        titleTxt = findViewById(R.id.title_txt);
         rootLayout = findViewById(R.id.root_lyt);
         webView = findViewById(R.id.webView);
         closeBtn = findViewById(R.id.close_button);
@@ -779,8 +1195,37 @@ public class WebViewActivity extends BaseActivity implements MenuItem.OnMenuItem
             captureScreenshot();
         });
         closeBtn.setOnClickListener(view -> {
-            startActivity(new Intent(WebViewActivity.this, MainActivity.class)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+            showProgressDialog(WebViewActivity.this);
+            DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
+            if (currentMeeting != null) {
+                reference.addListenerForSingleValueEvent(new ValueEventListener() {
+                    @Override
+                    public void onDataChange(@NonNull DataSnapshot snapshot) {
+                        if (snapshot.exists()) {
+                            for (DataSnapshot dataSnapshot : snapshot.getChildren()) {
+                                Meetings meetings = dataSnapshot.getValue(Meetings.class);
+                                assert meetings != null;
+                                if (meetings.getId().equals(meetingId)) {
+                                    htmlUrl = meetings.getHtmlUrl();
+                                    currentMeeting = meetings;
+                                    createAndSaveHtml(reference, currentMeeting, "close");
+                                }
+                            }
+                        }
+                    }
+
+                    @Override
+                    public void onCancelled(@NonNull DatabaseError error) {
+                        hideProgressDialog();
+                        startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+                    }
+                });
+            }else {
+                hideProgressDialog();
+                startActivity(new Intent(WebViewActivity.this, MainActivity.class)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK));
+            }
         });
 
         reloadBtn.setOnClickListener(view -> {

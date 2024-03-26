@@ -4,6 +4,8 @@ import static com.celeblingo.helper.Constants.DEFAULT_DRIVE_URL;
 import static com.celeblingo.helper.Constants.DEFAULT_EVENT_DESCRIPTION;
 import static com.celeblingo.helper.Constants.DEFAULT_GPT_URL;
 import static com.celeblingo.helper.Constants.DEFAULT_VIDEO_URL;
+import static com.celeblingo.helper.Utils.hideProgressDialog;
+import static com.celeblingo.helper.Utils.showProgressDialog;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
@@ -20,7 +22,6 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -29,11 +30,11 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentManager;
 import androidx.fragment.app.FragmentTransaction;
 
+import com.celeblingo.fragment.ConfigFragment;
 import com.celeblingo.fragment.HomeFragment;
 import com.celeblingo.fragment.MeetingFragment;
 import com.celeblingo.fragment.StartFragment;
 import com.celeblingo.helper.BaseActivity;
-import com.celeblingo.helper.Constants;
 import com.celeblingo.helper.Utils;
 import com.celeblingo.model.Meetings;
 import com.google.android.gms.auth.GoogleAuthException;
@@ -81,7 +82,6 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -89,7 +89,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class MainActivity extends BaseActivity {
-    private static final int RC_SIGN_IN = 121, REQUEST_AUTHORIZATION = 1001;;
+    private static final int RC_SIGN_IN = 121, REQUEST_AUTHORIZATION = 1001;
     private GoogleAccountCredential mCredential = null;
     private com.google.api.services.calendar.Calendar mService;
     private String meetingId, joinMeetingUrl = null;
@@ -102,6 +102,7 @@ public class MainActivity extends BaseActivity {
     private String web_client = "333558564968-81tk2qejtq6gr1bppa9nm7qkmjl3117b.apps.googleusercontent.com";
     private boolean isIdExists = false, isSameOrganizer = false, isMeetingIdExist = false;
     private GoogleSignInClient mGoogleSignInClient;
+    private boolean isActivityVisible = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,40 +112,46 @@ public class MainActivity extends BaseActivity {
 
         navigationView = findViewById(R.id.bottom_nav_view);
 
+
+        dialog = new Dialog(this);
+
         setUpBottomNavView();
         startSystemAlertWindowPermission();
         showJoinMeetingDialog();
         Utils.getDefaultUrlsFromFB();
+        Utils.checkUserData(this);
 
     }
 
     private void setUpBottomNavView() {
-        navigationView.setSelectedItemId(R.id.navigation_start);
-        replaceFragment(getSupportFragmentManager(), new StartFragment(), R.id.fragment_container);
+        navigationView.setSelectedItemId(R.id.navigation_meetings);
+        replaceFragment(getSupportFragmentManager(), new MeetingFragment(), R.id.fragment_container);
         navigationView.setOnItemSelectedListener(item -> {
             int id = item.getItemId();
             if (id == R.id.navigation_home) {
                 replaceFragment(getSupportFragmentManager(), new HomeFragment(), R.id.fragment_container);
                 return true;
             } else if (id == R.id.navigation_meetings) {
-                initCredentials();
-                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
-                if (account != null) {
-                    mCredential.setSelectedAccountName(account.getEmail());
-                    getResultsFromApi();
-                } else {
-                    googleSignIn();
-                }
+//                initCredentials();
+//                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
+//                if (account != null) {
+//                    mCredential.setSelectedAccountName(account.getEmail());
+//                    getResultsFromApi();
+//                } else {
+//                    googleSignIn();
+//                }
+                replaceFragment(getSupportFragmentManager(), new MeetingFragment(), R.id.fragment_container);
                 return true;
-            } else if (id == R.id.navigation_sign_in) {
-                initCredentials();
-                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
-                if (account != null) {
-                    mCredential.setSelectedAccountName(account.getEmail());
-                    getResultsFromApi();
-                } else {
-                    googleSignIn();
-                }
+            } else if (id == R.id.navigation_config) {
+//                initCredentials();
+//                GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(MainActivity.this);
+//                if (account != null) {
+//                    mCredential.setSelectedAccountName(account.getEmail());
+//                    getResultsFromApi();
+//                } else {
+//                    googleSignIn();
+//                }
+                replaceFragment(getSupportFragmentManager(), new ConfigFragment(), R.id.fragment_container);
                 return true;
             } else if (id == R.id.navigation_start) {
                 replaceFragment(getSupportFragmentManager(), new StartFragment(), R.id.fragment_container);
@@ -217,12 +224,14 @@ public class MainActivity extends BaseActivity {
             }
         });
 
-        new Handler().postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                getMeetingData();
-            }
-        }, 60 * 1000);
+        if (isActivityVisible) {
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    getMeetingData();
+                }
+            }, 2 * 60 * 1000);
+        }
 
     }
 
@@ -243,7 +252,9 @@ public class MainActivity extends BaseActivity {
                                 Log.d("==organ", organizer.getEmail());
                                 if (organizer.getEmail().equals(account.getEmail())) {
                                     if (!isFinishing()) {
-                                        dialog.show();
+                                        if (dialog != null && !dialog.isShowing()) {
+                                            dialog.show();
+                                        }
                                     }
                                 }
                                 organizerNameTxt.setText(organizer.getEmail());
@@ -358,7 +369,6 @@ public class MainActivity extends BaseActivity {
     }
 
     private void showJoinMeetingDialog() {
-        dialog = new Dialog(this);
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.dialog_meeting_popup);
         dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
@@ -384,15 +394,13 @@ public class MainActivity extends BaseActivity {
 
         joinBtn.setOnClickListener(view -> {
             youTubePlayerView.release();
-            if (joinMeetingUrl != null && !joinMeetingUrl.isEmpty()) {
-                String url = extractUrl(joinMeetingUrl);
-                Log.d("==url", url + " ");
-                dialog.dismiss();
-                startActivity(new Intent(MainActivity.this, WebViewActivity.class)
-                        .putExtra("url", url)
-                        .putExtra("type", "meeting")
-                        .putExtra("meetingId", meetingId));
-            }
+            String url = extractUrl(joinMeetingUrl);
+            Log.d("==url", url + " ");
+            dialog.dismiss();
+            startActivity(new Intent(MainActivity.this, WebViewActivity.class)
+                    .putExtra("url", url)
+                    .putExtra("type", "meeting")
+                    .putExtra("meetingId", meetingId));
         });
 
         getMeetingData();
@@ -400,7 +408,7 @@ public class MainActivity extends BaseActivity {
     }
 
     public static String extractUrl(String input) {
-        if (input == null){
+        if (input == null) {
             return DEFAULT_GPT_URL;
         }
         String htmlPattern = "<a[^>]+href=\"(.*?)\"[^>]*>(.*?)</a>";
@@ -422,6 +430,7 @@ public class MainActivity extends BaseActivity {
 
     @Override
     protected void onResume() {
+        isActivityVisible = true;
         View decorView = getWindow().getDecorView();
         int uiOptions = View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_IMMERSIVE;
@@ -429,6 +438,11 @@ public class MainActivity extends BaseActivity {
         super.onResume();
     }
 
+    @Override
+    protected void onPause() {
+        isActivityVisible = false;
+        super.onPause();
+    }
 
     private void startSystemAlertWindowPermission() {
         try {
@@ -487,6 +501,7 @@ public class MainActivity extends BaseActivity {
             } else {
                 Log.w("SignInError", "signInResult:failed code=" + e.getStatusCode());
             }
+            replaceFragment(getSupportFragmentManager(), new MeetingFragment(), R.id.fragment_container);
         }
     }
 
@@ -519,8 +534,9 @@ public class MainActivity extends BaseActivity {
     Exception mLastError = null;
 
     private void makeRequestTask() {
-        handler.post(() ->
-                Toast.makeText(this, "Loading...", Toast.LENGTH_SHORT).show());
+        handler.post(() -> {
+            showProgressDialog(MainActivity.this);
+        });
 
         executor.submit(() -> {
             List<Meetings> result = null;
@@ -528,12 +544,14 @@ public class MainActivity extends BaseActivity {
                 result = getDataFromCalendar();
             } catch (Exception e) {
                 mLastError = e;
+                hideProgressDialog();
             }
 
             final List<Meetings> finalResult = result;
             handler.post(() -> {
                 if (finalResult == null || finalResult.isEmpty()) {
                     Log.d("Google", "No data");
+                    hideProgressDialog();
                 } else {
                     saveMeetingDataToFirebase(finalResult);
                 }
@@ -541,9 +559,9 @@ public class MainActivity extends BaseActivity {
                 if (mLastError != null) {
                     if (mLastError instanceof UserRecoverableAuthIOException) {
                         googleSignIn();
-                    }else if (mLastError instanceof UserRecoverableAuthException){
+                    } else if (mLastError instanceof UserRecoverableAuthException) {
                         getAuthToken();
-                    }else if (mLastError != null) {
+                    } else if (mLastError != null) {
                         Log.d("==er ", "The following error occurred:\n" + mLastError.getMessage());
                     } else {
                         Log.d("==err", "Request cancelled.");
@@ -578,7 +596,10 @@ public class MainActivity extends BaseActivity {
             String endTime = meetingsList.get(i).getEndTime();
             String description = meetingsList.get(i).getDescription();
             String organizer = meetingsList.get(i).getOrganizer().getEmail();
+            String gptUrl = meetingsList.get(i).getGptUrl();
+            String driveUrl = meetingsList.get(i).getDriveUrl();
             String videoUrl = meetingsList.get(i).getVideoUrl();
+            String htmlUrl = meetingsList.get(i).getHtmlUrl();
             //String displayName = meetingsList.get(i).getOrganizer().getDisplayName();
             boolean self = meetingsList.get(i).getOrganizer().isSelf();
             HashMap<String, Object> eventHashMap = new HashMap<>();
@@ -587,7 +608,10 @@ public class MainActivity extends BaseActivity {
             eventHashMap.put("startTime", startTime);
             eventHashMap.put("endTime", endTime);
             eventHashMap.put("description", description);
+            eventHashMap.put("gptUrl", gptUrl);
+            eventHashMap.put("driveUrl", driveUrl);
             eventHashMap.put("videoUrl", videoUrl);
+            eventHashMap.put("htmlUrl", htmlUrl);
             HashMap<String, Object> organizerHashMap = new HashMap<>();
             organizerHashMap.put("email", organizer);
             //organizerHashMap.put("displayName", displayName);
@@ -604,6 +628,10 @@ public class MainActivity extends BaseActivity {
                 reference.child(id).child("Attendees")
                         .child(attendeeId + "").updateChildren(attendeeHashMap);
                 attendeeId = attendeeId + 1;
+            }
+            Log.d("==index", i + " " + meetingsList.size());
+            if (i == meetingsList.size() - 1){
+                hideProgressDialog();
             }
         }
         for (int i = 0; i < meetingsList.size(); i++) {
@@ -632,48 +660,8 @@ public class MainActivity extends BaseActivity {
 
                                                         Log.d("==cal id", meetings.getId() + " ");
                                                         checkIfEventExistsInGoogleCalendar(meetings.getId());
-
-//                                                        isSameOrganizer = true;
-//                                                        Date currentDate = new Date();
-//
-//                                                        DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-//                                                        dateFormat.setTimeZone(TimeZone.getTimeZone("GMT+03:30")); // Set the provided timezone
-//                                                        Date providedStartDate = null, providedEndDate = null;
-//                                                        try {
-//                                                            providedStartDate = dateFormat.parse(meetings.getStartTime());
-//                                                            providedEndDate = dateFormat.parse(meetings.getEndTime());
-//                                                        } catch (ParseException e) {
-//                                                            Log.d("exception", Objects.requireNonNull(e.getMessage()));
-//                                                        }
-//                                                        if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
-//                                                            if (mId.equals(meetings.getId())) {
-//                                                                isIdExists = true;
-//                                                            }
-//                                                            long fiveMinutesBefore = currentDate.getTime() + (providedStartDate.getTime() - providedEndDate.getTime());
-//                                                            if (!(currentDate.getTime() <= fiveMinutesBefore)) {
-//                                                                Log.d("==test", "" + currentDate.getTime() + " " + fiveMinutesBefore);
-//                                                                if (isSameOrganizer) {
-//                                                                    isIdExists = true;
-//                                                                }
-//                                                            }
-//                                                        } else if (currentDate.compareTo(providedStartDate) > 0) {
-//                                                            if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
-//                                                                if (mId.equals(meetings.getId())) {
-//                                                                    isIdExists = true;
-//                                                                }
-//                                                            }
-//                                                        }
-//                                                        if (currentDate.compareTo(providedEndDate) > 0) {
-//                                                            if (isSameOrganizer) {
-//                                                                isIdExists = true;
-//                                                            }
-//                                                        }
                                                     }
                                                 }
-//                                                if (isSameOrganizer && !isIdExists) {
-//                                                    Log.d("==meeidc", meetings.getId() + " : " + mId);
-//                                                    reference.child(meetings.getId()).removeValue();
-//                                                }
                                             }
                                         }
 
@@ -752,24 +740,29 @@ public class MainActivity extends BaseActivity {
 
                 Event.Organizer organizerList = event.getOrganizer();
                 Meetings.Organizer organizer = new Meetings.Organizer(organizerList.getEmail(), organizerList.getSelf());
-                String gptUrl = DEFAULT_GPT_URL, driveUrl = DEFAULT_DRIVE_URL, videoUrl = DEFAULT_VIDEO_URL;
+                String gptUrl = DEFAULT_GPT_URL, driveUrl = DEFAULT_DRIVE_URL, videoUrl = DEFAULT_VIDEO_URL, htmlUrl = "html";
                 String eventDescription = event.getDescription();
                 if (eventDescription != null) {
                     gptUrl = Utils.extractUrl(event.getDescription(), "gptUrl:", DEFAULT_GPT_URL);
                     driveUrl = Utils.extractUrl(event.getDescription(), "driveUrl:", DEFAULT_DRIVE_URL);
                     videoUrl = Utils.extractUrl(event.getDescription(), "videoUrl:", DEFAULT_VIDEO_URL);
-                }else {
+                    htmlUrl = Utils.extractUrl(event.getDescription(), "htmlUrl: ", "htmlUrl");
+                } else {
                     eventDescription = DEFAULT_EVENT_DESCRIPTION;
                 }
 
+
+                Log.d("==desc", eventDescription + "\n" + gptUrl + "\n" + driveUrl + "\n" + videoUrl);
+
                 Meetings model = new Meetings(event.getId(), event.getSummary(),
                         eventDescription, start.toString(), end.toString(),
-                        gptUrl, driveUrl, videoUrl,
+                        gptUrl, driveUrl, videoUrl, htmlUrl,
                         attendees, organizer);
                 eventModels.add(model);
             }
         } catch (IOException e) {
             Log.d("Google ex", e.getMessage());
+            hideProgressDialog();
         }
 
         return eventModels;

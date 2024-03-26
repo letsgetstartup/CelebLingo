@@ -1,0 +1,224 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    tools:context=".fragment.ConfigFragment">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/user_email_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:lineSpacingExtra="4sp"
+            android:text=""
+            android:textStyle="bold"
+            android:textColor="@color/title_txt_clr"
+            android:textSize="22sp" />
+
+    <TextView
+        android:id="@+id/all_meeting_html"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:layout_margin="20dp"
+        android:textColor="@color/black"
+        android:autoLink="web"
+        android:textColorLink="@color/black"
+        />
+
+    <LinearLayout
+        android:id="@+id/email_input_lyt"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_margin="5dp">
+
+        <TextView
+            android:id="@+id/continue_email_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="15dp"
+            android:layout_marginTop="15dp"
+            android:layout_marginEnd="15dp"
+            android:gravity="center_vertical"
+            android:lineSpacingExtra="4sp"
+            android:text="@string/continue_with_email"
+            android:textStyle="bold"
+            android:textColor="@color/title_txt_clr"
+            android:textSize="22sp" />
+
+        <EditText
+            android:id="@+id/input_email"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/rounded_stroke_bg"
+            android:layout_margin="15dp"
+            android:hint="@string/enter_your_email"
+            android:inputType="textEmailAddress"
+            android:padding="10dp"
+            android:textSize="18sp" />
+
+    </LinearLayout>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/email_login_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        app:cardCornerRadius="4dp"
+        android:elevation="2dp"
+        app:cardElevation="5dp"
+        android:layout_margin="10dp"
+        android:layout_gravity="center"
+        app:cardMaxElevation="2dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="50dp"
+            android:orientation="horizontal"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="6dp"
+            >
+
+            <ImageView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/ic_mail"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_marginEnd="12dp"
+                android:fontFamily="@font/roboto_medium"
+                android:lineSpacingExtra="4sp"
+                android:text="@string/continue_with_email"
+                android:textSize="18sp" />
+
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="5dp"
+        android:gravity="center"
+        android:lineSpacingExtra="4sp"
+        android:text="@string/or"
+        android:textStyle="normal"
+        android:textColor="@color/title_txt_clr"
+        android:textSize="16sp" />
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/login_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="50dp"
+        app:cardCornerRadius="4dp"
+        android:elevation="2dp"
+        app:cardElevation="5dp"
+        android:layout_margin="10dp"
+        android:layout_gravity="center"
+        app:cardMaxElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:padding="6dp"
+        >
+
+        <ImageView
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="10dp"
+            android:src="@drawable/google_btn"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="5dp"
+            android:layout_marginEnd="12dp"
+            android:fontFamily="@font/roboto_medium"
+            android:lineSpacingExtra="4sp"
+            android:text="@string/continue_with_google"
+            android:textSize="18sp" />
+
+
+    </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView
+        android:id="@+id/logout_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="50dp"
+        app:cardCornerRadius="4dp"
+        android:elevation="2dp"
+        app:cardElevation="5dp"
+        android:layout_margin="10dp"
+        android:layout_gravity="center"
+        app:cardMaxElevation="2dp">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="6dp"
+            >
+
+            <ImageView
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="12dp"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/google_btn"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="5dp"
+                android:layout_marginEnd="12dp"
+                android:fontFamily="@font/roboto_medium"
+                android:lineSpacingExtra="4sp"
+                android:text="@string/logout"
+                android:textSize="18sp" />
+
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
+
+        <TextView
+            android:id="@+id/version_name_txt"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text=""
+            android:layout_margin="20dp"
+            android:textColor="@color/black"
+            android:gravity="center"
+            />
+
+    </LinearLayout>
+
+</androidx.core.widget.NestedScrollView>

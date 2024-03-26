@@ -12,10 +12,9 @@
         android:title="@string/meeting" />
 
     <item
-        android:id="@+id/navigation_sign_in"
+        android:id="@+id/navigation_config"
         android:icon="@drawable/ic_login"
-        android:title="@string/sign_in"
-        android:visible="false"/>
+        android:title="@string/config"/>
 
     <item
         android:id="@+id/navigation_start"

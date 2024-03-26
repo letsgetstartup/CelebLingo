@@ -42,7 +42,7 @@ public class MeetingFragment extends Fragment {
 
     private void setUpMeetingTabs() {
 
-        replaceFragment(new UpcomingFragment());
+        replaceFragment(new HistoryFragment());
 
         toggleButton.addOnButtonCheckedListener((group, checkedId, isChecked) -> {
             if (checkedId == R.id.upcoming_btn && isChecked){

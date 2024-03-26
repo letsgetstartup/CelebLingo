@@ -14,7 +14,7 @@
         android:weightSum="2"
         app:singleSelection="true"
         app:selectionRequired="true"
-        app:checkedButton="@id/upcoming_btn">
+        app:checkedButton="@id/history_btn">
 
         <Button
             style="?attr/materialButtonOutlinedStyle"

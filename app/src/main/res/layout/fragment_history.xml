@@ -1,15 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:fillViewport="true"
     tools:context=".fragment.HistoryFragment">
+
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <include
+            android:id="@+id/top_start_lyt"
+            layout="@layout/layout_content_history"/>
+
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/meeting_recycler"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:layout_margin="5dp"
+        android:layout_below="@id/top_start_lyt"
         android:padding="5dp"
         tools:listitem="@layout/layout_meetings" />
 
@@ -17,12 +29,12 @@
         android:id="@+id/no_data_txt"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true"
         android:layout_margin="20dp"
         android:letterSpacing="0.01"
         android:lineSpacingExtra="4sp"
         android:padding="5dp"
-        android:text="@string/no_data"
+        android:layout_below="@id/top_start_lyt"
+        android:text="@string/no_history_data"
         android:textAlignment="center"
         android:textColor="@color/txt_clr"
         android:textSize="18sp"
@@ -32,6 +44,8 @@
         android:id="@+id/progress_bar"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_centerInParent="true" />
+        android:layout_centerInParent="true"/>
 
-</RelativeLayout>
+    </RelativeLayout>
+
+</androidx.core.widget.NestedScrollView>

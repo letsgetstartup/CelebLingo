@@ -1,13 +1,11 @@
 package com.celeblingo.fragment;
 
-import android.app.Dialog;
+import static com.celeblingo.helper.Constants.CURRENT_USER_EMAIL;
+import static com.celeblingo.helper.Constants.DEFAULT_EMAIL_ADDRESS;
+import static com.celeblingo.helper.Constants.IS_USER_LOGIN;
+
+import android.app.Activity;
 import android.os.Bundle;
-
-import androidx.annotation.NonNull;
-import androidx.fragment.app.Fragment;
-import androidx.recyclerview.widget.LinearLayoutManager;
-import androidx.recyclerview.widget.RecyclerView;
-
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,7 +13,11 @@ import android.view.ViewGroup;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
-import com.celeblingo.MainActivity;
+import androidx.annotation.NonNull;
+import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.celeblingo.R;
 import com.celeblingo.adapter.MeetingAdapter;
 import com.celeblingo.model.Meetings;
@@ -31,6 +33,7 @@ import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Objects;
 import java.util.TimeZone;
@@ -42,6 +45,7 @@ public class UpcomingFragment extends Fragment {
     private RecyclerView meetingRecycler;
     private ArrayList<Meetings> meetingsArrayList = new ArrayList<>();
     private MeetingAdapter meetingAdapter;
+    private String email;
 
     public UpcomingFragment() {
         // Required empty public constructor
@@ -75,11 +79,29 @@ public class UpcomingFragment extends Fragment {
     }
 
     private void getAllMeetingData() {
-        GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(requireActivity());
-        if (account == null) {
-            noDataTxt.setVisibility(View.VISIBLE);
-            return;
+        Activity activity = getActivity();
+        if (isAdded() && activity != null) {
+            GoogleSignInAccount account = GoogleSignIn.getLastSignedInAccount(requireActivity());
+            if (account == null) {
+                noDataTxt.setVisibility(View.GONE);
+                if (IS_USER_LOGIN) {
+                    if (CURRENT_USER_EMAIL != null && !CURRENT_USER_EMAIL.isEmpty()){
+                        email = CURRENT_USER_EMAIL;
+                    }else {
+                        email = DEFAULT_EMAIL_ADDRESS;
+                    }
+                }else {
+                    email = DEFAULT_EMAIL_ADDRESS;
+                }
+                getUpcomingMeetingsData(email);
+                return;
+            }
+            email = account.getEmail();
+            getUpcomingMeetingsData(email);
         }
+    }
+
+    private void getUpcomingMeetingsData(String email) {
         DatabaseReference reference = FirebaseDatabase.getInstance().getReference().child("Meetings");
         reference.addListenerForSingleValueEvent(new ValueEventListener() {
             @Override
@@ -96,7 +118,7 @@ public class UpcomingFragment extends Fragment {
                                         if (snapshot.exists()) {
                                             for (DataSnapshot dataSnapshot1 : snapshot.getChildren()) {
                                                 Meetings.Organizer organizer = dataSnapshot1.getValue(Meetings.Organizer.class);
-                                                if (organizer.getEmail().equals(account.getEmail())) {
+                                                if (organizer.getEmail().equals(email)) {
                                                     Date currentDate = new Date();
 
                                                     DateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
@@ -110,10 +132,38 @@ public class UpcomingFragment extends Fragment {
                                                     }
                                                     if (currentDate.compareTo(providedStartDate) < 0 || currentDate.compareTo(providedStartDate) == 0) {
                                                         meetingsArrayList.add(meetings);
+                                                        meetingsArrayList.sort((t1, t2) -> {
+                                                            try {
+                                                                Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                        .parse(t1.getStartTime());
+                                                                Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                        .parse(t2.getStartTime());
+                                                                Log.d("== sts", start + " " + end);
+                                                                assert end != null;
+                                                                return end.compareTo(start);
+                                                            } catch (ParseException e) {
+                                                                return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+                                                            }
+                                                        });
+                                                        Collections.reverse(meetingsArrayList);
                                                         meetingAdapter.notifyDataSetChanged();
                                                     } else if (currentDate.compareTo(providedStartDate) > 0) {
                                                         if (currentDate.compareTo(providedEndDate) < 0 || currentDate.compareTo(providedEndDate) == 0) {
                                                             meetingsArrayList.add(meetings);
+                                                            meetingsArrayList.sort((t1, t2) -> {
+                                                                try {
+                                                                    Date start = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                            .parse(t1.getStartTime());
+                                                                    Date end = new SimpleDateFormat("yyyyddMMHHmmss")
+                                                                            .parse(t2.getStartTime());
+                                                                    Log.d("== sts", start + " " + end);
+                                                                    assert end != null;
+                                                                    return end.compareTo(start);
+                                                                } catch (ParseException e) {
+                                                                    return t2.getStartTime().compareToIgnoreCase(t1.getStartTime());
+                                                                }
+                                                            });
+                                                            Collections.reverse(meetingsArrayList);
                                                             meetingAdapter.notifyDataSetChanged();
                                                         }
                                                     }
